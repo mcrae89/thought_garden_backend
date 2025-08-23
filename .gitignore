@@ -1,0 +1,68 @@
+# Build artifacts
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code settings
+.vscode/
+
+# Visual Studio settings
+.vs/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.tmp.*
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage reports
+coverage/
+*.coverage
+*.coveragexml
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+# Allow NuGet config files, ignore only the cache
+.nuget/*
+!.nuget/NuGet.Config
+
+# EF Core migrations snapshots (optional, keep if you want only SQL-based migrations tracked)
+*Migrations/*Designer.cs
+
+# Secrets
+appsettings.Development.json
+appsettings.Local.json
+.env
+.env.*
+
+# Docker
+docker-compose.override.yml
+.docker/
+.dockerignore
+
+# OS-generated
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store
+
+# Rider/JetBrains
+.idea/
+
+# Test results
+TestResults/
