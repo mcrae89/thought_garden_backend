@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to container
 builder.Services.AddControllers();
 
-// EF Core DbContext (placeholder connection string from appsettings.json)
+// EF Core DbContext
 builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -17,13 +17,28 @@ builder.Services
     .AddQueryType<Queries>()
     .AddMutationType<Mutations>();
 
-// Swagger (still handy for REST endpoints)
+// Swagger for REST endpoints
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// CORS policy — allow all (safe for local dev)
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
-// Development-only tools
+// Enable CORS before routing
+app.UseCors();
+
+// Development tools
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -32,7 +47,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapControllers();        // Enable REST controllers
-app.MapGraphQL("/graphql");  // GraphQL endpoint
+app.MapControllers();        // REST
+app.MapGraphQL("/graphql");  // GraphQL
 
 app.Run();

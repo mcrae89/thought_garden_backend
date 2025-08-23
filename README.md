@@ -1,76 +1,35 @@
-    # Thought Garden — Backend (ASP.NET Core 8 + GraphQL)
+# Thought Garden Backend
 
-    Backend API for Thought Garden. Built with **ASP.NET Core 8**, **Hot Chocolate (GraphQL)**, **EF Core**, and **PostgreSQL**.
+ASP.NET Core 8 Web API + GraphQL backend for the **Thought Garden** journaling app.  
+Provides encrypted journal entry storage, sentiment tagging (future), and garden state visualization.
 
-    ## Features (MVP)
-    - GraphQL API (Hot Chocolate)
-    - JWT authentication
-    - Journal entries with AES-256-GCM encryption at rest
-    - Soft delete for entries
-    - PostgreSQL via EF Core
+---
 
-    ## Getting Started (Local Dev)
-    ### Prereqs
-    - .NET 8 SDK
-    - Docker (for local Postgres) or a running PostgreSQL instance
-    - Node is **not** required here
+## ⚡️ Tech Stack
+- **.NET 8** (ASP.NET Core Web API)
+- **GraphQL (Hot Chocolate)**
+- **Entity Framework Core 8** (PostgreSQL provider)
+- **PostgreSQL** for persistence
+- **Docker** for containerization
+- **GitHub Actions** for CI/CD
 
-    ### 1) Configure environment
-    Create a `.env.local` file (never commit this) at repo root:
-    ```env
-    # Example values; customize as needed
-    ASPNETCORE_ENVIRONMENT=Development
-    DATABASE_URL=Host=localhost;Port=5432;Database=thought_garden;Username=postgres;Password=postgres
-    JWT_PRIVATE_KEY_PEM=-----BEGIN PRIVATE KEY-----
-...your-key...
------END PRIVATE KEY-----
-    # Optional: Key Vault/KMS settings (future)
-    ```
+---
 
-    ### 2) Start Postgres (Docker)
-    ```bash
-    docker compose up -d
-    # or: docker run --name tg-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16
-    ```
+## 🚀 Getting Started
 
-    ### 3) Run migrations
-    ```bash
-    dotnet restore
-    dotnet tool restore
-    dotnet ef database update
-    ```
+### 1. Prerequisites
+- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- [PostgreSQL](https://www.postgresql.org/download/) (or Docker)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) (optional, for containerization)
 
-    ### 4) Run the API
-    ```bash
-    dotnet run --project src/ThoughtGarden.Api
-    # GraphQL endpoint (example): https://localhost:5001/graphql
-    ```
+### 2. Local Database Setup
+```powershell
+# Create database in local Postgres
+psql -U postgres -c "CREATE DATABASE thought_garden;"
 
-    ## Project Structure (suggested)
-    ```
-    src/
-      ThoughtGarden.Api/         # ASP.NET Core host + GraphQL schema registration
-      ThoughtGarden.Core/        # domain models, encryption utilities
-      ThoughtGarden.Data/        # DbContext, entities, EF migrations
-    tests/
-      ThoughtGarden.Tests/       # unit/integration tests
-    docker/
-      docker-compose.yml         # local Postgres, optional admin tools
-    ```
-
-    ## Useful Commands
-    ```bash
-    # add migration
-    dotnet ef migrations add Init --project src/ThoughtGarden.Data --startup-project src/ThoughtGarden.Api
-
-    # update database
-    dotnet ef database update --project src/ThoughtGarden.Data --startup-project src/ThoughtGarden.Api
-    ```
-
-    ## CI
-    See `.github/workflows/backend-ci.yml` for minimal build/test pipeline.
-
-    ## Security Notes
-    - Never log plaintext journal content.
-    - Keep JWT signing keys and DB credentials in secure secrets (Key Vault / GitHub Actions secrets).
-    - All traffic must be over HTTPS.
+### 3. Run the API
+```powershell
+cd src/ThoughtGarden.Api
+dotnet restore
+dotnet build
+dotnet run
