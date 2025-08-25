@@ -7,7 +7,6 @@ namespace ThoughtGarden.Models
     {
         public int Id { get; set; }  // Primary Key
         public string Text { get; set; } = null!;
-        public string? Mood { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; } = false;
@@ -16,7 +15,11 @@ namespace ThoughtGarden.Models
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
-        // Many-to-many: JournalEntry <-> EmotionTag
-        public ICollection<EntryEmotion> Emotions { get; set; } = new List<EntryEmotion>();
+        // ✅ Primary mood
+        public int? MoodId { get; set; }
+        public EmotionTag? Mood { get; set; }
+
+        // ✅ Secondary emotions (with intensities)
+        public ICollection<EntryEmotion> SecondaryEmotions { get; set; } = new List<EntryEmotion>();
     }
 }

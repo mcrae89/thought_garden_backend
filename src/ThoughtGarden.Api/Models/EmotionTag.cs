@@ -9,7 +9,7 @@ namespace ThoughtGarden.Models
         public string Color { get; set; } = null!;
         public string? Icon { get; set; }
 
-        // Many-to-many: EmotionTag <-> JournalEntry
-        public ICollection<EntryEmotion> Entries { get; set; } = new List<EntryEmotion>();
+        // ✅ Many-to-many via EntryEmotion (secondary emotions)
+        public ICollection<EntryEmotion> EntryLinks { get; set; } = new List<EntryEmotion>();
     }
 }

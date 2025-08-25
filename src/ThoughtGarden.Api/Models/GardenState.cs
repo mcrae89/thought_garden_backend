@@ -10,6 +10,6 @@
         public DateTime SnapshotAt { get; set; } = DateTime.UtcNow;  // When this snapshot was created
 
         // Navigation
-        public ICollection<Plant> Plants { get; set; } = new List<Plant>();
+        public ICollection<GardenPlant> Plants { get; set; } = new List<GardenPlant>();
     }
 }

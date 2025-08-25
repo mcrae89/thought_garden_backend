@@ -9,7 +9,9 @@ builder.Services.AddControllers();
 
 // EF Core DbContext
 builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+           .UseSnakeCaseNamingConvention()
+        );
 
 // GraphQL (Hot Chocolate)
 builder.Services
