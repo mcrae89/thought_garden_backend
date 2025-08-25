@@ -1,17 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace ThoughtGarden.Models
 {
     public class User
     {
-        public int Id { get; set; }  // Primary key
-        public string Email { get; set; } = null!;  // Required
-        public string Password { get; set; } = null!; // Hashed, not plain text
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public int Id { get; set; }
 
-        // Navigation properties
-        public ICollection<JournalEntry> Entries { get; set; } = new List<JournalEntry>();
+        public string UserName { get; set; } = null!;
+        public string Email { get; set; } = null!;
+        public string PasswordHash { get; set; } = null!;
+
+        // ✅ Role for authorization
+        public UserRole Role { get; set; } = UserRole.User;
+
+        // Navigation
+        public ICollection<GardenState> GardenStates { get; set; } = new List<GardenState>();
+        public ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
+
         public UserSettings? Settings { get; set; }
+    }
+
+    public enum UserRole
+    {
+        User,
+        Admin,
+        Moderator
     }
 }
