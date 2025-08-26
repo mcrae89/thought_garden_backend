@@ -13,6 +13,9 @@ namespace ThoughtGarden.Models
         // ✅ Role for authorization
         public UserRole Role { get; set; } = UserRole.User;
 
+        public int SubscriptionPlanId { get; set; }
+        public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
+
         // Navigation
         public ICollection<GardenState> GardenStates { get; set; } = new List<GardenState>();
         public ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();

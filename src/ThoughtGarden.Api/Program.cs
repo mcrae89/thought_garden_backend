@@ -17,7 +17,9 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
 builder.Services
     .AddGraphQLServer()
     .AddQueryType<Queries>()
-    .AddMutationType<Mutations>();
+    .AddMutationType<Mutations>()
+    .AddMutationType(d => d.Name("Mutation"))
+    .AddTypeExtension<UserMutations>();
 
 // Swagger for REST endpoints
 builder.Services.AddEndpointsApiExplorer();

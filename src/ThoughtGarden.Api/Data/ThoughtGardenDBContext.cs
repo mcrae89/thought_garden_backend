@@ -58,16 +58,18 @@ namespace ThoughtGarden.Api.Data
                     Id = 1,
                     UserName = "admin",
                     Email = "admin@example.com",
-                    PasswordHash = "hashedpassword1", // TODO: replace with real hash
-                    Role = UserRole.Admin
+                    PasswordHash = "hashedpassword1",
+                    Role = UserRole.Admin,
+                    SubscriptionPlanId = 2  // give admin Pro
                 },
                 new User
                 {
                     Id = 2,
                     UserName = "regular",
                     Email = "user@example.com",
-                    PasswordHash = "hashedpassword2", // TODO: replace with real hash
-                    Role = UserRole.User
+                    PasswordHash = "hashedpassword2",
+                    Role = UserRole.User,
+                    SubscriptionPlanId = 1  // free tier
                 }
             );
 
@@ -121,6 +123,25 @@ namespace ThoughtGarden.Api.Data
 
                 // User 2, Entry 4: Mood = Calm → PlantTypeId = 4 (Lotus)
                 new GardenPlant { Id = 4, GardenStateId = 2, PlantTypeId = 4, Stage = GardenPlant.GrowthStage.Mature, GrowthProgress = 1.0, CreatedAt = seedDate, UpdatedAt = seedDate }
+            );
+
+            modelBuilder.Entity<SubscriptionPlan>().HasData(
+                new SubscriptionPlan
+                {
+                    Id = 1,
+                    Name = "Free",
+                    MaxJournalEntriesPerDay = 3,
+                    MaxGardenCustomizationsPerDay = 2,
+                    Price = 0.00m
+                },
+                new SubscriptionPlan
+                {
+                    Id = 2,
+                    Name = "Pro",
+                    MaxJournalEntriesPerDay = int.MaxValue,
+                    MaxGardenCustomizationsPerDay = int.MaxValue,
+                    Price = 9.99m
+                }
             );
 
 
