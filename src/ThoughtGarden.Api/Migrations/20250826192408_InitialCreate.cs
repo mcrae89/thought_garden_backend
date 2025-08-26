@@ -30,19 +30,20 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "users",
+                name: "subscription_plan",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    user_name = table.Column<string>(type: "text", nullable: false),
-                    email = table.Column<string>(type: "text", nullable: false),
-                    password_hash = table.Column<string>(type: "text", nullable: false),
-                    role = table.Column<int>(type: "integer", nullable: false)
+                    name = table.Column<string>(type: "text", nullable: false),
+                    max_journal_entries_per_day = table.Column<int>(type: "integer", nullable: false),
+                    max_garden_customizations_per_day = table.Column<int>(type: "integer", nullable: false),
+                    price = table.Column<decimal>(type: "numeric", nullable: false),
+                    billing_period = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_users", x => x.id);
+                    table.PrimaryKey("pk_subscription_plan", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -66,12 +67,36 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "users",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    user_name = table.Column<string>(type: "text", nullable: false),
+                    email = table.Column<string>(type: "text", nullable: false),
+                    password_hash = table.Column<string>(type: "text", nullable: false),
+                    role = table.Column<int>(type: "integer", nullable: false),
+                    subscription_plan_id = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_users", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_users_subscription_plan_subscription_plan_id",
+                        column: x => x.subscription_plan_id,
+                        principalTable: "subscription_plan",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "garden_states",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     user_id = table.Column<int>(type: "integer", nullable: false),
+                    size = table.Column<int>(type: "integer", nullable: false),
                     snapshot_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -147,7 +172,9 @@ namespace ThoughtGarden.Api.Migrations
                     growth_progress = table.Column<double>(type: "double precision", nullable: false),
                     stage = table.Column<int>(type: "integer", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    order = table.Column<int>(type: "integer", nullable: true),
+                    is_stored = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -203,32 +230,12 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.InsertData(
-                table: "users",
-                columns: new[] { "id", "email", "password_hash", "role", "user_name" },
+                table: "subscription_plan",
+                columns: new[] { "id", "billing_period", "max_garden_customizations_per_day", "max_journal_entries_per_day", "name", "price" },
                 values: new object[,]
                 {
-                    { 1, "admin@example.com", "hashedpassword1", 1, "admin" },
-                    { 2, "user@example.com", "hashedpassword2", 0, "regular" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "garden_states",
-                columns: new[] { "id", "snapshot_at", "user_id" },
-                values: new object[,]
-                {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
-                });
-
-            migrationBuilder.InsertData(
-                table: "journal_entries",
-                columns: new[] { "id", "created_at", "is_deleted", "mood_id", "text", "updated_at", "user_id" },
-                values: new object[,]
-                {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 1, "Feeling happy and accomplished today.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 3, "Got frustrated with a bug, but resolved it.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 2, "Sad about the weather, it's been gloomy.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 },
-                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 4, "Went for a walk and felt calm afterward.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
+                    { 1, "Monthly", 2, 3, "Free", 0.00m },
+                    { 2, "Monthly", 2147483647, 2147483647, "Pro", 9.99m }
                 });
 
             migrationBuilder.InsertData(
@@ -240,6 +247,35 @@ namespace ThoughtGarden.Api.Migrations
                     { 2, 2, "Willow" },
                     { 3, 3, "Cactus" },
                     { 4, 4, "Lotus" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "users",
+                columns: new[] { "id", "email", "password_hash", "role", "subscription_plan_id", "user_name" },
+                values: new object[,]
+                {
+                    { 1, "admin@example.com", "hashedpassword1", 1, 2, "admin" },
+                    { 2, "user@example.com", "hashedpassword2", 0, 1, "regular" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "garden_states",
+                columns: new[] { "id", "size", "snapshot_at", "user_id" },
+                values: new object[,]
+                {
+                    { 1, 5, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
+                    { 2, 5, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
+                });
+
+            migrationBuilder.InsertData(
+                table: "journal_entries",
+                columns: new[] { "id", "created_at", "is_deleted", "mood_id", "text", "updated_at", "user_id" },
+                values: new object[,]
+                {
+                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 1, "Feeling happy and accomplished today.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
+                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 3, "Got frustrated with a bug, but resolved it.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
+                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 2, "Sad about the weather, it's been gloomy.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 },
+                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 4, "Went for a walk and felt calm afterward.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
                 });
 
             migrationBuilder.InsertData(
@@ -255,13 +291,13 @@ namespace ThoughtGarden.Api.Migrations
 
             migrationBuilder.InsertData(
                 table: "garden_plants",
-                columns: new[] { "id", "created_at", "garden_state_id", "growth_progress", "plant_type_id", "stage", "updated_at" },
+                columns: new[] { "id", "created_at", "garden_state_id", "growth_progress", "is_stored", "order", "plant_type_id", "stage", "updated_at" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.80000000000000004, 1, 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.20000000000000001, 3, 0, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 0.5, 2, 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 1.0, 4, 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) }
+                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.80000000000000004, true, null, 1, 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.20000000000000001, true, null, 3, 0, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 0.5, true, null, 2, 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 1.0, true, null, 4, 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) }
                 });
 
             migrationBuilder.CreateIndex(
@@ -304,6 +340,11 @@ namespace ThoughtGarden.Api.Migrations
                 table: "user_settings",
                 column: "user_id",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_users_subscription_plan_id",
+                table: "users",
+                column: "subscription_plan_id");
         }
 
         /// <inheritdoc />
@@ -332,6 +373,9 @@ namespace ThoughtGarden.Api.Migrations
 
             migrationBuilder.DropTable(
                 name: "emotion_tags");
+
+            migrationBuilder.DropTable(
+                name: "subscription_plan");
         }
     }
 }

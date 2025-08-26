@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL;
+using ThoughtGarden.Api.GraphQL.Mutations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,9 +18,14 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
 builder.Services
     .AddGraphQLServer()
     .AddQueryType<Queries>()
-    .AddMutationType<Mutations>()
     .AddMutationType(d => d.Name("Mutation"))
-    .AddTypeExtension<UserMutations>();
+        .AddTypeExtension<RootMutations>()
+        .AddTypeExtension<UserMutations>()
+        .AddTypeExtension<JournalEntryMutations>()
+        .AddTypeExtension<EmotionTagMutations>()
+        .AddTypeExtension<GardenStateMutations>()
+        .AddTypeExtension<GardenPlantMutations>()
+        .AddTypeExtension<PlantTypeMutations>();
 
 // Swagger for REST endpoints
 builder.Services.AddEndpointsApiExplorer();

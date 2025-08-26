@@ -1,6 +1,7 @@
 ﻿namespace ThoughtGarden.Api.GraphQL;
 
-public class Mutations
+[ExtendObjectType("Mutation")]
+public class RootMutations
 {
     public string Ping(string message) => $"You said: {message}";
 }

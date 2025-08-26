@@ -12,8 +12,8 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20250826043153_AddSubscriptions")]
-    partial class AddSubscriptions
+    [Migration("20250826192408_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -207,6 +207,14 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("growth_progress");
 
+                    b.Property<bool>("IsStored")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_stored");
+
+                    b.Property<int?>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
                     b.Property<int>("PlantTypeId")
                         .HasColumnType("integer")
                         .HasColumnName("plant_type_id");
@@ -237,6 +245,7 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 1,
                             GrowthProgress = 0.80000000000000004,
+                            IsStored = true,
                             PlantTypeId = 1,
                             Stage = 2,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -247,6 +256,7 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 1,
                             GrowthProgress = 0.20000000000000001,
+                            IsStored = true,
                             PlantTypeId = 3,
                             Stage = 0,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -257,6 +267,7 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 2,
                             GrowthProgress = 0.5,
+                            IsStored = true,
                             PlantTypeId = 2,
                             Stage = 1,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -267,6 +278,7 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 2,
                             GrowthProgress = 1.0,
+                            IsStored = true,
                             PlantTypeId = 4,
                             Stage = 3,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -281,6 +293,10 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Size")
+                        .HasColumnType("integer")
+                        .HasColumnName("size");
 
                     b.Property<DateTime>("SnapshotAt")
                         .HasColumnType("timestamp with time zone")
@@ -302,12 +318,14 @@ namespace ThoughtGarden.Api.Migrations
                         new
                         {
                             Id = 1,
+                            Size = 5,
                             SnapshotAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 1
                         },
                         new
                         {
                             Id = 2,
+                            Size = 5,
                             SnapshotAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 2
                         });

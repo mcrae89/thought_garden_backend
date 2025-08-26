@@ -9,10 +9,15 @@ namespace ThoughtGarden.Models
         public int PlantTypeId { get; set; }
 
         // Per-user growth
-        public double GrowthProgress { get; set; }
-        public GrowthStage Stage { get; set; }  // Enum stays inside GardenPlant
+        public double GrowthProgress { get; set; } = 0.0;
+        public GrowthStage Stage { get; set; } = GrowthStage.Seed;
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+
+        // Placement
+        public int? Order { get; set; }  // null = not assigned to garden layout
+        public bool IsStored { get; set; } = true; // default new plants go into storage
+
 
         // Navigation
         public GardenState GardenState { get; set; } = null!;
