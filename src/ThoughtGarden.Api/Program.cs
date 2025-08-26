@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL;
 using ThoughtGarden.Api.GraphQL.Mutations;
+using ThoughtGarden.Api.GraphQL.Queries;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,14 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
 // GraphQL (Hot Chocolate)
 builder.Services
     .AddGraphQLServer()
-    .AddQueryType<Queries>()
+    .AddQueryType(d => d.Name("Query"))
+        .AddTypeExtension<RootQueries>()
+        .AddTypeExtension<UserQueries>()
+        .AddTypeExtension<JournalEntryQueries>()
+        .AddTypeExtension<GardenQueries>()
+        .AddTypeExtension<PlantQueries>()
+        .AddTypeExtension<EmotionQueries>()
+        .AddTypeExtension<ServerInfoQueries>()
     .AddMutationType(d => d.Name("Mutation"))
         .AddTypeExtension<RootMutations>()
         .AddTypeExtension<UserMutations>()
