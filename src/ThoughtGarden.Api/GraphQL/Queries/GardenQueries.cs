@@ -11,19 +11,12 @@ namespace ThoughtGarden.Api.GraphQL.Queries
 
         public GardenQueries(ThoughtGardenDbContext db) => _db = db;
 
-        public async Task<List<GardenState>> GetGardens(int userId) =>
-            await _db.GardenStates
-                .Where(g => g.UserId == userId)
-                .Include(g => g.Plants)
-                    .ThenInclude(p => p.PlantType)
-                        .ThenInclude(pt => pt.EmotionTag)
-                .ToListAsync();
+        [UseProjection]
+        public IQueryable<GardenState> GetGardens(int userId) =>
+            _db.GardenStates.Where(gs => gs.UserId == userId);
 
-        public async Task<GardenState?> GetGardenById(int id) =>
-            await _db.GardenStates
-                .Include(g => g.Plants)
-                    .ThenInclude(p => p.PlantType)
-                        .ThenInclude(pt => pt.EmotionTag)
-                .FirstOrDefaultAsync(g => g.Id == id);
+        [UseProjection]
+        public IQueryable<GardenState> GetGardenById(int id) =>
+            _db.GardenStates.Where(gs => gs.Id == id);
     }
 }

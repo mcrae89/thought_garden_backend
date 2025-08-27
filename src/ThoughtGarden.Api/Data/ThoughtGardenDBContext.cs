@@ -113,16 +113,60 @@ namespace ThoughtGarden.Api.Data
             // Garden Plants
             modelBuilder.Entity<GardenPlant>().HasData(
                 // User 1, Entry 1: Mood = Happy → PlantTypeId = 1 (Sunflower)
-                new GardenPlant { Id = 1, GardenStateId = 1, PlantTypeId = 1, Stage = GardenPlant.GrowthStage.Bloom, GrowthProgress = 0.8, CreatedAt = seedDate, UpdatedAt = seedDate },
+                new GardenPlant
+                {
+                    Id = 1,
+                    GardenStateId = 1,
+                    PlantTypeId = 1,
+                    Stage = GardenPlant.GrowthStage.Bloom,
+                    GrowthProgress = 0.8,
+                    CreatedAt = seedDate,
+                    UpdatedAt = seedDate,
+                    Order = null,        // not yet placed
+                    IsStored = true      // in storage
+                },
 
                 // User 1, Entry 2: Mood = Angry → PlantTypeId = 3 (Cactus)
-                new GardenPlant { Id = 2, GardenStateId = 1, PlantTypeId = 3, Stage = GardenPlant.GrowthStage.Seed, GrowthProgress = 0.2, CreatedAt = seedDate, UpdatedAt = seedDate },
+                new GardenPlant
+                {
+                    Id = 2,
+                    GardenStateId = 1,
+                    PlantTypeId = 3,
+                    Stage = GardenPlant.GrowthStage.Seed,
+                    GrowthProgress = 0.2,
+                    CreatedAt = seedDate,
+                    UpdatedAt = seedDate,
+                    Order = 1,           // placed first in garden
+                    IsStored = false     // active in layout
+                },
 
                 // User 2, Entry 3: Mood = Sad → PlantTypeId = 2 (Willow)
-                new GardenPlant { Id = 3, GardenStateId = 2, PlantTypeId = 2, Stage = GardenPlant.GrowthStage.Sprout, GrowthProgress = 0.5, CreatedAt = seedDate, UpdatedAt = seedDate },
+                new GardenPlant
+                {
+                    Id = 3,
+                    GardenStateId = 2,
+                    PlantTypeId = 2,
+                    Stage = GardenPlant.GrowthStage.Sprout,
+                    GrowthProgress = 0.5,
+                    CreatedAt = seedDate,
+                    UpdatedAt = seedDate,
+                    Order = 2,           // placed second
+                    IsStored = false
+                },
 
                 // User 2, Entry 4: Mood = Calm → PlantTypeId = 4 (Lotus)
-                new GardenPlant { Id = 4, GardenStateId = 2, PlantTypeId = 4, Stage = GardenPlant.GrowthStage.Mature, GrowthProgress = 1.0, CreatedAt = seedDate, UpdatedAt = seedDate }
+                new GardenPlant
+                {
+                    Id = 4,
+                    GardenStateId = 2,
+                    PlantTypeId = 4,
+                    Stage = GardenPlant.GrowthStage.Mature,
+                    GrowthProgress = 1.0,
+                    CreatedAt = seedDate,
+                    UpdatedAt = seedDate,
+                    Order = null,
+                    IsStored = true
+                }
             );
 
             modelBuilder.Entity<SubscriptionPlan>().HasData(

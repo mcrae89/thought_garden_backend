@@ -11,10 +11,11 @@ namespace ThoughtGarden.Api.GraphQL.Queries
 
         public EmotionQueries(ThoughtGardenDbContext db) => _db = db;
 
-        public async Task<List<EmotionTag>> GetEmotions() =>
-            await _db.EmotionTags.ToListAsync();
+        [UseProjection]
+        public IQueryable<EmotionTag> GetEmotions() => _db.EmotionTags;
 
-        public async Task<EmotionTag?> GetEmotionById(int id) =>
-            await _db.EmotionTags.FirstOrDefaultAsync(e => e.Id == id);
+        [UseProjection]
+        public IQueryable<EmotionTag> GetEmotionById(int id) =>
+            _db.EmotionTags.Where(e => e.Id == id);
     }
 }

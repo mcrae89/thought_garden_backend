@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL;
 using ThoughtGarden.Api.GraphQL.Mutations;
 using ThoughtGarden.Api.GraphQL.Queries;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,17 +17,28 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
            .UseSnakeCaseNamingConvention()
-        );
+);
+
+builder.Services.AddScoped<UserQueries>();
+builder.Services.AddScoped<JournalEntryQueries>();
+builder.Services.AddScoped<GardenQueries>();
+builder.Services.AddScoped<GardenPlantQueries>();
+builder.Services.AddScoped<EmotionQueries>();
+builder.Services.AddScoped<ServerInfoQueries>();
 
 // GraphQL (Hot Chocolate)
 builder.Services
     .AddGraphQLServer()
+    .AddAuthorization()
+    .AddProjections()
+    .AddFiltering()
+    .AddSorting()
     .AddQueryType(d => d.Name("Query"))
         .AddTypeExtension<RootQueries>()
         .AddTypeExtension<UserQueries>()
         .AddTypeExtension<JournalEntryQueries>()
         .AddTypeExtension<GardenQueries>()
-        .AddTypeExtension<PlantQueries>()
+        .AddTypeExtension<GardenPlantQueries>()
         .AddTypeExtension<EmotionQueries>()
         .AddTypeExtension<ServerInfoQueries>()
     .AddMutationType(d => d.Name("Mutation"))
@@ -51,6 +66,27 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Authentication + Authorization
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+            )
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Enable CORS before routing
@@ -64,6 +100,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Authentication + Authorization middleware
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();        // REST
 app.MapGraphQL("/graphql");  // GraphQL

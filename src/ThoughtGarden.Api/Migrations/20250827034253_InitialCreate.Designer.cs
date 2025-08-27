@@ -12,7 +12,7 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20250826192408_InitialCreate")]
+    [Migration("20250827034253_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -256,7 +256,8 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 1,
                             GrowthProgress = 0.20000000000000001,
-                            IsStored = true,
+                            IsStored = false,
+                            Order = 1,
                             PlantTypeId = 3,
                             Stage = 0,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -267,7 +268,8 @@ namespace ThoughtGarden.Api.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 2,
                             GrowthProgress = 0.5,
-                            IsStored = true,
+                            IsStored = false,
+                            Order = 2,
                             PlantTypeId = 2,
                             Stage = 1,
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)

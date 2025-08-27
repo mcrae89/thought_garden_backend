@@ -11,19 +11,11 @@ namespace ThoughtGarden.Api.GraphQL.Queries
 
         public JournalEntryQueries(ThoughtGardenDbContext db) => _db = db;
 
-        public async Task<List<JournalEntry>> GetJournalEntries(int userId) =>
-            await _db.JournalEntries
-                .Where(e => e.UserId == userId && !e.IsDeleted)
-                .Include(e => e.Mood)
-                .Include(e => e.SecondaryEmotions)
-                    .ThenInclude(se => se.Emotion)
-                .ToListAsync();
+        [UseProjection]
+        public IQueryable<JournalEntry> GetJournalEntries() => _db.JournalEntries;
 
-        public async Task<JournalEntry?> GetJournalEntryById(int id) =>
-            await _db.JournalEntries
-                .Include(e => e.Mood)
-                .Include(e => e.SecondaryEmotions)
-                    .ThenInclude(se => se.Emotion)
-                .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
+        [UseProjection]
+        public IQueryable<JournalEntry> GetJournalEntryById(int id) =>
+            _db.JournalEntries.Where(jl => jl.Id == id);
     }
 }
