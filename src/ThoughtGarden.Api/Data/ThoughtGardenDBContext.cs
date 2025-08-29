@@ -58,7 +58,7 @@ namespace ThoughtGarden.Api.Data
                     Id = 1,
                     UserName = "admin",
                     Email = "admin@example.com",
-                    PasswordHash = "hashedpassword1",
+                    PasswordHash = "$2a$11$bMbVvslv1w8ctmZB9XJJl.EZHIHgshLMc8zGmryaeKOH2nx/iDFZy",
                     Role = UserRole.Admin,
                     SubscriptionPlanId = 2  // give admin Pro
                 },
@@ -67,7 +67,7 @@ namespace ThoughtGarden.Api.Data
                     Id = 2,
                     UserName = "regular",
                     Email = "user@example.com",
-                    PasswordHash = "hashedpassword2",
+                    PasswordHash = "$2a$11$FVx.eRjAlmsDfYXTGklNEuXbP3o4Gb45QVkTop/yK0xo5PkUNHLH6",
                     Role = UserRole.User,
                     SubscriptionPlanId = 1  // free tier
                 }

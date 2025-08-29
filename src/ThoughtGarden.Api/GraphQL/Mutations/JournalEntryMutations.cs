@@ -8,14 +8,8 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [ExtendObjectType("Mutation")]
     public class JournalEntryMutations
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public JournalEntryMutations(ThoughtGardenDbContext db)
-        {
-            _db = db;
-        }
-        // ✅ Add a new journal entry
-        public async Task<JournalEntry> AddJournalEntry(string text, int userId, int moodId, List<SecondaryEmotionInput>? secondaryEmotions)
+        // Add a new journal entry
+        public async Task<JournalEntry> AddJournalEntry(string text, int userId, int moodId, List<SecondaryEmotionInput>? secondaryEmotions, [Service] ThoughtGardenDbContext db)
         {
             var entry = new JournalEntry
             {
@@ -27,32 +21,32 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
                 IsDeleted = false
             };
 
-            _db.JournalEntries.Add(entry);
-            await _db.SaveChangesAsync();
+            db.JournalEntries.Add(entry);
+            await db.SaveChangesAsync();
 
             // ✅ Add secondary emotions
             if (secondaryEmotions != null && secondaryEmotions.Count > 0)
             {
                 foreach (var se in secondaryEmotions)
                 {
-                    _db.EntryEmotions.Add(new EntryEmotion
+                    db.EntryEmotions.Add(new EntryEmotion
                     {
                         EntryId = entry.Id,
                         EmotionId = se.EmotionId,
                         Intensity = se.Intensity
                     });
                 }
-                await _db.SaveChangesAsync();
+                await db.SaveChangesAsync();
             }
 
             return entry;
         }
 
 
-        // ✅ Update an existing journal entry
-        public async Task<JournalEntry?> UpdateJournalEntry(int id, string? text, int? moodId, List<SecondaryEmotionInput>? secondaryEmotions)
+        // Update an existing journal entry
+        public async Task<JournalEntry?> UpdateJournalEntry(int id, string? text, int? moodId, List<SecondaryEmotionInput>? secondaryEmotions, [Service] ThoughtGardenDbContext db)
         {
-            var entry = await _db.JournalEntries
+            var entry = await db.JournalEntries
                 .Include(e => e.SecondaryEmotions)
                 .FirstOrDefaultAsync(e => e.Id == id);
 
@@ -64,12 +58,12 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             if (secondaryEmotions != null)
             {
                 // Remove old ones
-                _db.EntryEmotions.RemoveRange(entry.SecondaryEmotions);
+                db.EntryEmotions.RemoveRange(entry.SecondaryEmotions);
 
                 // Add new ones
                 foreach (var se in secondaryEmotions)
                 {
-                    _db.EntryEmotions.Add(new EntryEmotion
+                    db.EntryEmotions.Add(new EntryEmotion
                     {
                         EntryId = entry.Id,
                         EmotionId = se.EmotionId,
@@ -79,21 +73,21 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             }
 
             entry.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
 
             return entry;
         }
 
-        // ✅ Soft delete a journal entry
-        public async Task<bool> DeleteJournalEntry(int id)
+        // Soft delete a journal entry
+        public async Task<bool> DeleteJournalEntry(int id, [Service] ThoughtGardenDbContext db)
         {
-            var entry = await _db.JournalEntries.FindAsync(id);
+            var entry = await db.JournalEntries.FindAsync(id);
             if (entry == null) return false;
 
             entry.IsDeleted = true;
             entry.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             return true;
         }
     }

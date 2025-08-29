@@ -7,16 +7,12 @@ namespace ThoughtGarden.Api.GraphQL.Queries
     [ExtendObjectType("Query")]
     public class GardenQueries
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public GardenQueries(ThoughtGardenDbContext db) => _db = db;
+        [UseProjection]
+        public IQueryable<GardenState> GetGardens(int userId, [Service] ThoughtGardenDbContext db) =>
+            db.GardenStates.Where(gs => gs.UserId == userId);
 
         [UseProjection]
-        public IQueryable<GardenState> GetGardens(int userId) =>
-            _db.GardenStates.Where(gs => gs.UserId == userId);
-
-        [UseProjection]
-        public IQueryable<GardenState> GetGardenById(int id) =>
-            _db.GardenStates.Where(gs => gs.Id == id);
+        public IQueryable<GardenState> GetGardenById(int id, [Service] ThoughtGardenDbContext db) =>
+            db.GardenStates.Where(gs => gs.Id == id);
     }
 }

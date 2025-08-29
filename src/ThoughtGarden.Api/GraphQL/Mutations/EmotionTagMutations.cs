@@ -6,40 +6,34 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [ExtendObjectType("Mutation")]
     public class EmotionTagMutations
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public EmotionTagMutations(ThoughtGardenDbContext db)
-        {
-            _db = db;
-        }
-        public async Task<EmotionTag> AddEmotionTag(string name,string color,string? icon)
+        public async Task<EmotionTag> AddEmotionTag(string name,string color,string? icon, [Service] ThoughtGardenDbContext db)
         {
             var tag = new EmotionTag { Name = name, Color = color, Icon = icon };
-            _db.EmotionTags.Add(tag);
-            await _db.SaveChangesAsync();
+            db.EmotionTags.Add(tag);
+            await db.SaveChangesAsync();
             return tag;
         }
 
-        public async Task<EmotionTag?> UpdateEmotionTag(int id,string? name,string? color,string? icon)
+        public async Task<EmotionTag?> UpdateEmotionTag(int id,string? name,string? color,string? icon, [Service] ThoughtGardenDbContext db)
         {
-            var tag = await _db.EmotionTags.FindAsync(id);
+            var tag = await db.EmotionTags.FindAsync(id);
             if (tag == null) return null;
 
             if (!string.IsNullOrWhiteSpace(name)) tag.Name = name;
             if (!string.IsNullOrWhiteSpace(color)) tag.Color = color;
             if (!string.IsNullOrWhiteSpace(icon)) tag.Icon = icon;
 
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             return tag;
         }
 
-        public async Task<bool> DeleteEmotionTag(int id)
+        public async Task<bool> DeleteEmotionTag(int id, [Service] ThoughtGardenDbContext db)
         {
-            var tag = await _db.EmotionTags.FindAsync(id);
+            var tag = await db.EmotionTags.FindAsync(id);
             if (tag == null) return false;
 
-            _db.EmotionTags.Remove(tag);
-            await _db.SaveChangesAsync();
+            db.EmotionTags.Remove(tag);
+            await db.SaveChangesAsync();
             return true;
         }
     }

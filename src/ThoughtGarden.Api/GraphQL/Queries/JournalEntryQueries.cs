@@ -7,15 +7,11 @@ namespace ThoughtGarden.Api.GraphQL.Queries
     [ExtendObjectType("Query")]
     public class JournalEntryQueries
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public JournalEntryQueries(ThoughtGardenDbContext db) => _db = db;
+        [UseProjection]
+        public IQueryable<JournalEntry> GetJournalEntries([Service] ThoughtGardenDbContext db) => db.JournalEntries;
 
         [UseProjection]
-        public IQueryable<JournalEntry> GetJournalEntries() => _db.JournalEntries;
-
-        [UseProjection]
-        public IQueryable<JournalEntry> GetJournalEntryById(int id) =>
-            _db.JournalEntries.Where(jl => jl.Id == id);
+        public IQueryable<JournalEntry> GetJournalEntryById(int id, [Service] ThoughtGardenDbContext db) =>
+            db.JournalEntries.Where(jl => jl.Id == id);
     }
 }

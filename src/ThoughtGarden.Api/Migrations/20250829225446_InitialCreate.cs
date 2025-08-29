@@ -254,8 +254,8 @@ namespace ThoughtGarden.Api.Migrations
                 columns: new[] { "id", "email", "password_hash", "role", "subscription_plan_id", "user_name" },
                 values: new object[,]
                 {
-                    { 1, "admin@example.com", "hashedpassword1", 1, 2, "admin" },
-                    { 2, "user@example.com", "hashedpassword2", 0, 1, "regular" }
+                    { 1, "admin@example.com", "$2a$11$bMbVvslv1w8ctmZB9XJJl.EZHIHgshLMc8zGmryaeKOH2nx/iDFZy", 1, 2, "admin" },
+                    { 2, "user@example.com", "$2a$11$FVx.eRjAlmsDfYXTGklNEuXbP3o4Gb45QVkTop/yK0xo5PkUNHLH6", 0, 1, "regular" }
                 });
 
             migrationBuilder.InsertData(

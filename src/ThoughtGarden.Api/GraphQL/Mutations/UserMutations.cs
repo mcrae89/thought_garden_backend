@@ -6,15 +6,8 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [ExtendObjectType("Mutation")]
     public class UserMutations
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public UserMutations(ThoughtGardenDbContext db)
-        {
-            _db = db;
-        }
-
-        // ✅ Create a new user
-        public async Task<User> AddUser(string userName,string email,string passwordHash,UserRole role,int subscriptionPlanId)
+        // Create a new user
+        public async Task<User> AddUser(string userName,string email,string passwordHash,UserRole role,int subscriptionPlanId, [Service] ThoughtGardenDbContext db)
         {
             var user = new User
             {
@@ -25,32 +18,32 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
                 SubscriptionPlanId = subscriptionPlanId
             };
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
             return user;
         }
 
-        // ✅ Update user email/username
-        public async Task<User?> UpdateUser(int id,string? userName,string? email)
+        // Update user email/username
+        public async Task<User?> UpdateUser(int id,string? userName,string? email, [Service] ThoughtGardenDbContext db)
         {
-            var user = await _db.Users.FindAsync(id);
+            var user = await db.Users.FindAsync(id);
             if (user == null) return null;
 
             if (!string.IsNullOrWhiteSpace(userName)) user.UserName = userName;
             if (!string.IsNullOrWhiteSpace(email)) user.Email = email;
 
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             return user;
         }
 
-        // ✅ Soft delete user
-        public async Task<bool> DeleteUser(int id)
+        // Soft delete user
+        public async Task<bool> DeleteUser(int id, [Service] ThoughtGardenDbContext db)
         {
-            var user = await _db.Users.FindAsync(id);
+            var user = await db.Users.FindAsync(id);
             if (user == null) return false;
 
-            _db.Users.Remove(user);  // hard delete for now (MVP)
-            await _db.SaveChangesAsync();
+            db.Users.Remove(user);  // hard delete for now (MVP)
+            await db.SaveChangesAsync();
             return true;
         }
     }

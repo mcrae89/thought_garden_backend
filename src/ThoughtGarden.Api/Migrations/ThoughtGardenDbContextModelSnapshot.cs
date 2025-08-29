@@ -520,7 +520,7 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 1,
                             Email = "admin@example.com",
-                            PasswordHash = "hashedpassword1",
+                            PasswordHash = "$2a$11$bMbVvslv1w8ctmZB9XJJl.EZHIHgshLMc8zGmryaeKOH2nx/iDFZy",
                             Role = 1,
                             SubscriptionPlanId = 2,
                             UserName = "admin"
@@ -529,7 +529,7 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 2,
                             Email = "user@example.com",
-                            PasswordHash = "hashedpassword2",
+                            PasswordHash = "$2a$11$FVx.eRjAlmsDfYXTGklNEuXbP3o4Gb45QVkTop/yK0xo5PkUNHLH6",
                             Role = 0,
                             SubscriptionPlanId = 1,
                             UserName = "regular"

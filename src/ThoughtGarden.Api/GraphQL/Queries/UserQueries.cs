@@ -9,19 +9,15 @@ namespace ThoughtGarden.Api.GraphQL.Queries
     [ExtendObjectType("Query")]
     public class UserQueries
     {
-        private readonly ThoughtGardenDbContext _db;
-
-        public UserQueries(ThoughtGardenDbContext db) => _db = db;
+        [UseProjection]
+        public IQueryable<User> GetUsers([Service] ThoughtGardenDbContext db) => db.Users;
 
         [UseProjection]
-        public IQueryable<User> GetUsers() => _db.Users;
-
-        [UseProjection]
-        public IQueryable<User> GetUserById(int id) =>
-            _db.Users.Where(u => u.Id == id);
+        public IQueryable<User> GetUserById(int id, [Service] ThoughtGardenDbContext db) =>
+            db.Users.Where(u => u.Id == id);
 
         // REGISTER
-        public async Task<User> RegisterUser(string username, string email, string password)
+        public async Task<User> RegisterUser(string username, string email, string password, [Service] ThoughtGardenDbContext db)
         {
             var hash = PasswordHelper.HashPassword(password);
 
@@ -29,34 +25,35 @@ namespace ThoughtGarden.Api.GraphQL.Queries
             {
                 UserName = username,
                 Email = email,
-                PasswordHash = hash
+                PasswordHash = hash,
+                Role = UserRole.User,
+                SubscriptionPlanId = 1
             };
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
 
             return user;
         }
 
         // LOGIN
-        public async Task<string> LoginUser(string email, string password)
+        public async Task<string> LoginUser(string email,string password,ThoughtGardenDbContext db,[Service] JwtHelper jwtHelper)
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) throw new GraphQLException("User not found");
 
             if (!PasswordHelper.VerifyPassword(password, user.PasswordHash))
                 throw new GraphQLException("Invalid password");
 
-            // Issue JWT here (we’ll wire this up in Step 5)
-            return JwtHelper.GenerateToken(user);
+            return jwtHelper.GenerateToken(user);
         }
 
         [Authorize]
         [UseProjection]
-        public IQueryable<User> GetProfile(ClaimsPrincipal claims)
+        public IQueryable<User> GetProfile(ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db)
         {
             var userId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            return _db.Users.Where(u => u.Id == userId);
+            return db.Users.Where(u => u.Id == userId);
         }
     }
 }

@@ -19,12 +19,7 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
            .UseSnakeCaseNamingConvention()
 );
 
-builder.Services.AddScoped<UserQueries>();
-builder.Services.AddScoped<JournalEntryQueries>();
-builder.Services.AddScoped<GardenQueries>();
-builder.Services.AddScoped<GardenPlantQueries>();
-builder.Services.AddScoped<EmotionQueries>();
-builder.Services.AddScoped<ServerInfoQueries>();
+builder.Services.AddSingleton<JwtHelper>();
 
 // GraphQL (Hot Chocolate)
 builder.Services
@@ -80,7 +75,7 @@ builder.Services
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+                Convert.FromBase64String(builder.Configuration["Jwt:Key"]!)
             )
         };
     });
