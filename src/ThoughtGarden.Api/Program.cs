@@ -1,9 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using ThoughtGarden.Api.Data;
-using ThoughtGarden.Api.GraphQL;
 using ThoughtGarden.Api.GraphQL.Mutations;
 using ThoughtGarden.Api.GraphQL.Queries;
 
@@ -19,7 +17,7 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
            .UseSnakeCaseNamingConvention()
 );
 
-builder.Services.AddSingleton<JwtHelper>();
+builder.Services.AddScoped<JwtHelper>();
 
 // GraphQL (Hot Chocolate)
 builder.Services
@@ -29,7 +27,6 @@ builder.Services
     .AddFiltering()
     .AddSorting()
     .AddQueryType(d => d.Name("Query"))
-        .AddTypeExtension<RootQueries>()
         .AddTypeExtension<UserQueries>()
         .AddTypeExtension<JournalEntryQueries>()
         .AddTypeExtension<GardenQueries>()
@@ -37,7 +34,6 @@ builder.Services
         .AddTypeExtension<EmotionQueries>()
         .AddTypeExtension<ServerInfoQueries>()
     .AddMutationType(d => d.Name("Mutation"))
-        .AddTypeExtension<RootMutations>()
         .AddTypeExtension<UserMutations>()
         .AddTypeExtension<JournalEntryMutations>()
         .AddTypeExtension<EmotionTagMutations>()

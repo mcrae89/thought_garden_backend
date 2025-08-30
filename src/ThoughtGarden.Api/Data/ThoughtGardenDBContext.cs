@@ -15,6 +15,8 @@ namespace ThoughtGarden.Api.Data
         public DbSet<GardenState> GardenStates { get; set; }
         public DbSet<PlantType> PlantTypes { get; set; }
         public DbSet<GardenPlant> GardenPlants { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
