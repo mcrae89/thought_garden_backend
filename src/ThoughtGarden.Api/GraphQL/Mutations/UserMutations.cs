@@ -8,23 +8,6 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [ExtendObjectType("Mutation")]
     public class UserMutations
     {
-        // Create a new user
-        public async Task<User> AddUser(string userName,string email,string passwordHash,UserRole role,int subscriptionPlanId, [Service] ThoughtGardenDbContext db)
-        {
-            var user = new User
-            {
-                UserName = userName,
-                Email = email,
-                PasswordHash = passwordHash,
-                Role = role,
-                SubscriptionPlanId = subscriptionPlanId
-            };
-
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-            return user;
-        }
-
         // Update user email/username
         public async Task<User?> UpdateUser(int id,string? userName,string? email, [Service] ThoughtGardenDbContext db)
         {
