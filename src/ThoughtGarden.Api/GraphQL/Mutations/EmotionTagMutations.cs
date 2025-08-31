@@ -1,12 +1,14 @@
 ﻿using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
+using HotChocolate.Authorization;
 
 namespace ThoughtGarden.Api.GraphQL.Mutations
 {
     [ExtendObjectType("Mutation")]
     public class EmotionTagMutations
     {
-        public async Task<EmotionTag> AddEmotionTag(string name,string color,string? icon, [Service] ThoughtGardenDbContext db)
+        [Authorize(Roles = new[] { nameof(UserRole.Admin) })]
+        public async Task<EmotionTag> AddEmotionTag(string name, string color, string? icon, [Service] ThoughtGardenDbContext db)
         {
             var tag = new EmotionTag { Name = name, Color = color, Icon = icon };
             db.EmotionTags.Add(tag);
@@ -14,7 +16,8 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             return tag;
         }
 
-        public async Task<EmotionTag?> UpdateEmotionTag(int id,string? name,string? color,string? icon, [Service] ThoughtGardenDbContext db)
+        [Authorize(Roles = new[] { nameof(UserRole.Admin) })]
+        public async Task<EmotionTag?> UpdateEmotionTag(int id, string? name, string? color, string? icon, [Service] ThoughtGardenDbContext db)
         {
             var tag = await db.EmotionTags.FindAsync(id);
             if (tag == null) return null;
@@ -27,6 +30,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             return tag;
         }
 
+        [Authorize(Roles = new[] { nameof(UserRole.Admin) })]
         public async Task<bool> DeleteEmotionTag(int id, [Service] ThoughtGardenDbContext db)
         {
             var tag = await db.EmotionTags.FindAsync(id);

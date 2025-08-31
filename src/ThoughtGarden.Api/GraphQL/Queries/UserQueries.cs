@@ -1,6 +1,5 @@
 ﻿using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using HotChocolate.Authorization;
 
@@ -9,12 +8,13 @@ namespace ThoughtGarden.Api.GraphQL.Queries
     [ExtendObjectType("Query")]
     public class UserQueries
     {
+        [Authorize(Roles = new[] { nameof(UserRole.Admin) })]
         [UseProjection]
         public IQueryable<User> GetUsers([Service] ThoughtGardenDbContext db) => db.Users;
 
+        [Authorize(Roles = new[] { nameof(UserRole.Admin) })]
         [UseProjection]
-        public IQueryable<User> GetUserById(int id, [Service] ThoughtGardenDbContext db) =>
-            db.Users.Where(u => u.Id == id);
+        public IQueryable<User> GetUserById(int id, [Service] ThoughtGardenDbContext db) => db.Users.Where(u => u.Id == id);
 
         [Authorize]
         [UseProjection]

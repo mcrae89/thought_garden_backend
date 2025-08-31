@@ -12,7 +12,7 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20250830043616_InitialCreate")]
+    [Migration("20250831180550_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
