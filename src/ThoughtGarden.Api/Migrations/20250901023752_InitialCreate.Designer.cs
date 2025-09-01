@@ -12,7 +12,7 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20250831180550_InitialCreate")]
+    [Migration("20250901023752_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -492,9 +492,9 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnName("price");
 
                     b.HasKey("Id")
-                        .HasName("pk_subscription_plan");
+                        .HasName("pk_subscription_plans");
 
-                    b.ToTable("subscription_plan", (string)null);
+                    b.ToTable("subscription_plans", (string)null);
 
                     b.HasData(
                         new
@@ -719,7 +719,7 @@ namespace ThoughtGarden.Api.Migrations
                         .HasForeignKey("SubscriptionPlanId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_users_subscription_plan_subscription_plan_id");
+                        .HasConstraintName("fk_users_subscription_plans_subscription_plan_id");
 
                     b.Navigation("SubscriptionPlan");
                 });

@@ -30,7 +30,7 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "subscription_plan",
+                name: "subscription_plans",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "integer", nullable: false)
@@ -43,7 +43,7 @@ namespace ThoughtGarden.Api.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_subscription_plan", x => x.id);
+                    table.PrimaryKey("pk_subscription_plans", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -82,9 +82,9 @@ namespace ThoughtGarden.Api.Migrations
                 {
                     table.PrimaryKey("pk_users", x => x.id);
                     table.ForeignKey(
-                        name: "fk_users_subscription_plan_subscription_plan_id",
+                        name: "fk_users_subscription_plans_subscription_plan_id",
                         column: x => x.subscription_plan_id,
-                        principalTable: "subscription_plan",
+                        principalTable: "subscription_plans",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -253,7 +253,7 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.InsertData(
-                table: "subscription_plan",
+                table: "subscription_plans",
                 columns: new[] { "id", "billing_period", "max_garden_customizations_per_day", "max_journal_entries_per_day", "name", "price" },
                 values: new object[,]
                 {
@@ -406,7 +406,7 @@ namespace ThoughtGarden.Api.Migrations
                 name: "emotion_tags");
 
             migrationBuilder.DropTable(
-                name: "subscription_plan");
+                name: "subscription_plans");
         }
     }
 }

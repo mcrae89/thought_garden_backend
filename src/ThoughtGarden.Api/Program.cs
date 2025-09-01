@@ -100,3 +100,5 @@ app.MapControllers();        // REST
 app.MapGraphQL("/graphql");  // GraphQL
 
 app.Run();
+
+public partial class Program { }
