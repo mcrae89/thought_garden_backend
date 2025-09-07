@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using System.Security.Cryptography;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql.EntityFrameworkCore.PostgreSQL; // <-- needed for UseSnakeCaseNamingConvention
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
-using System.Security.Cryptography;
 
 namespace ThoughtGarden.Api.Tests.Factories
 {
@@ -13,7 +14,7 @@ namespace ThoughtGarden.Api.Tests.Factories
     {
         private readonly string _connectionString;
 
-        // Strong random 256-bit key
+        // Strong 256-bit key for HMAC-SHA256
         public string JwtKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         public string JwtIssuer { get; } = "TestIssuer";
         public string JwtAudience { get; } = "TestAudience";
@@ -27,6 +28,7 @@ namespace ThoughtGarden.Api.Tests.Factories
         {
             builder.ConfigureAppConfiguration((context, config) =>
             {
+                // Make the app’s auth use our test values (so tokens validate)
                 var dict = new Dictionary<string, string?>
                 {
                     { "Jwt:Key", JwtKey },
@@ -38,33 +40,40 @@ namespace ThoughtGarden.Api.Tests.Factories
 
             builder.ConfigureServices(services =>
             {
-                // Replace DbContext with Testcontainers connection string
+                // Remove app’s default DbContext registration
                 var descriptor = services.SingleOrDefault(
                     d => d.ServiceType == typeof(DbContextOptions<ThoughtGardenDbContext>));
-                if (descriptor != null)
+                if (descriptor is not null)
                 {
                     services.Remove(descriptor);
                 }
 
+                // IMPORTANT: mirror production EF options, including snake_case
                 services.AddDbContext<ThoughtGardenDbContext>(options =>
-                    options.UseNpgsql(_connectionString, npgsql =>
-                        npgsql.MigrationsAssembly(typeof(ThoughtGardenDbContext).Assembly.FullName)));
+                    options
+                        .UseNpgsql(_connectionString, npgsql =>
+                            npgsql.MigrationsAssembly(typeof(ThoughtGardenDbContext).Assembly.FullName))
+                        .UseSnakeCaseNamingConvention() // <-- this makes test DB tables/columns snake_case like prod
+                );
 
-                // Apply migrations + seed
+                // Apply migrations and seed baseline data
                 var sp = services.BuildServiceProvider();
                 using var scope = sp.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+
                 db.Database.Migrate();
 
+                // Seed subscription plan (needed by user)
                 if (!db.SubscriptionPlans.Any())
                 {
                     db.SubscriptionPlans.Add(new SubscriptionPlan { Name = "Default", Price = 0 });
                     db.SaveChanges();
                 }
 
+                // Seed a deterministic user used by some tests
                 if (!db.Users.Any(u => u.UserName == "seeduser"))
                 {
-                    var planId = db.SubscriptionPlans.First().Id;
+                    var planId = db.SubscriptionPlans.Select(p => p.Id).First();
                     db.Users.Add(new User
                     {
                         UserName = "seeduser",
