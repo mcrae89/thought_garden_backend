@@ -3,96 +3,78 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Security.Cryptography;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
+using System.Security.Cryptography;
 
 namespace ThoughtGarden.Api.Tests.Factories
 {
     public class ApiFactory : WebApplicationFactory<Program>
     {
-        public string JwtKey { get; private set; } = string.Empty;
+        private readonly string _connectionString;
+
+        // Strong random 256-bit key
+        public string JwtKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        public string JwtIssuer { get; } = "TestIssuer";
+        public string JwtAudience { get; } = "TestAudience";
+
+        public ApiFactory(string connectionString)
+        {
+            _connectionString = connectionString;
+        }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Test");
-
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                // 🔹 Generate a secure 256-bit (32 byte) key for HS256
-                var keyBytes = RandomNumberGenerator.GetBytes(32);
-                JwtKey = Convert.ToBase64String(keyBytes);
-
-                var testSettings = new Dictionary<string, string?>
-            {
-                { "Jwt:Key", JwtKey },
-                { "Jwt:Issuer", "TestIssuer" },
-                { "Jwt:Audience", "TestAudience" }
-            };
-
-                config.AddInMemoryCollection(testSettings!);
+                var dict = new Dictionary<string, string?>
+                {
+                    { "Jwt:Key", JwtKey },
+                    { "Jwt:Issuer", JwtIssuer },
+                    { "Jwt:Audience", JwtAudience }
+                };
+                config.AddInMemoryCollection(dict!);
             });
 
             builder.ConfigureServices(services =>
             {
-                // Remove existing DbContext registrations
-                var toRemove = services
-                    .Where(d =>
-                        d.ServiceType == typeof(DbContextOptions<ThoughtGardenDbContext>) ||
-                        d.ServiceType == typeof(ThoughtGardenDbContext) ||
-                        (d.ServiceType.IsGenericType &&
-                         d.ServiceType.GetGenericTypeDefinition() == typeof(IDbContextFactory<>)))
-                    .ToList();
+                // Replace DbContext with Testcontainers connection string
+                var descriptor = services.SingleOrDefault(
+                    d => d.ServiceType == typeof(DbContextOptions<ThoughtGardenDbContext>));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
 
-                foreach (var d in toRemove)
-                    services.Remove(d);
+                services.AddDbContext<ThoughtGardenDbContext>(options =>
+                    options.UseNpgsql(_connectionString, npgsql =>
+                        npgsql.MigrationsAssembly(typeof(ThoughtGardenDbContext).Assembly.FullName)));
 
-                // Point to your test Postgres
-                var conn = Environment.GetEnvironmentVariable("TG_TEST_DB")
-                           ?? "Host=localhost;Port=5432;Database=thoughtgarden_test;Username=postgres;Password=postgres";
-
-                services.AddDbContext<ThoughtGardenDbContext>(o => o.UseNpgsql(conn));
-
-                // Build the container so we can migrate & seed immediately.
+                // Apply migrations + seed
                 var sp = services.BuildServiceProvider();
                 using var scope = sp.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
-                db.Database.EnsureDeleted();
                 db.Database.Migrate();
 
-                // Always ensure a plan exists
-                var plan = db.SubscriptionPlans.FirstOrDefault();
-                if (plan == null)
+                if (!db.SubscriptionPlans.Any())
                 {
-                    plan = new SubscriptionPlan
-                    {
-                        Name = "Test Plan",
-                        MaxJournalEntriesPerDay = 5,
-                        MaxGardenCustomizationsPerDay = 3,
-                        Price = 0m,
-                        BillingPeriod = "Monthly"
-                    };
-                    db.SubscriptionPlans.Add(plan);
+                    db.SubscriptionPlans.Add(new SubscriptionPlan { Name = "Default", Price = 0 });
                     db.SaveChanges();
                 }
 
-                // Always ensure a user exists
-                var user = db.Users.FirstOrDefault(u => u.UserName == "seeduser");
-                if (user == null)
+                if (!db.Users.Any(u => u.UserName == "seeduser"))
                 {
-                    user = new User
+                    var planId = db.SubscriptionPlans.First().Id;
+                    db.Users.Add(new User
                     {
                         UserName = "seeduser",
                         Email = "seed@test.com",
-                        PasswordHash = "hash",
+                        PasswordHash = PasswordHelper.HashPassword("P@ssw0rd!"),
                         Role = UserRole.User,
-                        SubscriptionPlanId = plan.Id
-                    };
-                    db.Users.Add(user);
+                        SubscriptionPlanId = planId
+                    });
                     db.SaveChanges();
                 }
-
             });
         }
     }
