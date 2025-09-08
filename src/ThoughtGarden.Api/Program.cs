@@ -32,6 +32,7 @@ builder.Services
         .AddTypeExtension<GardenQueries>()
         .AddTypeExtension<GardenPlantQueries>()
         .AddTypeExtension<EmotionQueries>()
+        .AddTypeExtension<PlantTypeQueries>()
         .AddTypeExtension<ServerInfoQueries>()
     .AddMutationType(d => d.Name("Mutation"))
         .AddTypeExtension<UserMutations>()
