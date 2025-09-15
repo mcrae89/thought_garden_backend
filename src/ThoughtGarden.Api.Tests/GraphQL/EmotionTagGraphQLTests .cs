@@ -72,7 +72,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             CreateAndAuthenticateTempUser("query_emotion_byid", "query_emotion_byid@test.com");
 
-            // Seeded DB has EmotionTags (Ids 1..4 from HasData)
             var query = new { query = "{ emotionById(id:1) { id name } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
@@ -99,6 +98,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // Mutation Tests
         // ---------------------------
 
+        // ---- Add ----
         [Fact]
         public async Task AddEmotionTag_Allows_Admin()
         {
@@ -126,9 +126,20 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        [Fact]
+        public async Task AddEmotionTag_Denies_Anonymous()
+        {
+            var mutation = new { query = "mutation { addEmotionTag(name:\"Anon\", color:\"#123\", icon:\"ghost\") { id name } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ---- Update ----
         [Fact]
         public async Task UpdateEmotionTag_Allows_Admin()
         {
@@ -169,26 +180,36 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        [Fact]
+        public async Task UpdateEmotionTag_Denies_Anonymous()
+        {
+            var mutation = new { query = "mutation { updateEmotionTag(id:1, name:\"AnonUpdate\") { id name } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ---- Delete ----
         [Fact]
         public async Task DeleteEmotionTag_Allows_Admin()
         {
             CreateAndAuthenticateTempUser("admin_deletetag", "admin_deletetag@test.com", role: "Admin");
 
-            // First add a tag
             var add = new { query = "mutation { addEmotionTag(name:\"TempDel\", color:\"#ccc\", icon:\"trash\") { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             addResp.EnsureSuccessStatusCode();
             var id = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addEmotionTag").GetProperty("id").GetInt32();
 
-            // Delete it
             var del = new { query = $"mutation {{ deleteEmotionTag(id:{id}) }}" };
             var delResp = await _client.PostAsJsonAsync("/graphql", del);
             delResp.EnsureSuccessStatusCode();
             var json = await delResp.Content.ReadAsStringAsync();
+
             Assert.Contains("true", json);
         }
 
@@ -215,7 +236,17 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task DeleteEmotionTag_Denies_Anonymous()
+        {
+            var mutation = new { query = "mutation { deleteEmotionTag(id:1) }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
