@@ -24,6 +24,21 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
         }
 
         [Authorize]
+        public async Task<GardenPlant> GrowGardenPlant(int plantId, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db, int growthMultiplier = 1)
+        {
+            var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var role = claims.FindFirstValue(ClaimTypes.Role);
+
+            var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == plantId);
+            if (plant == null) return null;
+            if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
+
+            plant.GrowthProgress = plant.GrowthProgress + (.05 * growthMultiplier);
+            await db.SaveChangesAsync();
+            return plant;
+        }
+
+        [Authorize]
         public async Task<GardenPlant?> MoveGardenPlant(int plantId, int newOrder, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db)
         {
             var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);

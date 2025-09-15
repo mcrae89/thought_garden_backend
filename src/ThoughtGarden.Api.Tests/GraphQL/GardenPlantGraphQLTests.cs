@@ -113,7 +113,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         // ---------------------------
-        // Query tests
+        // Query Tests
         // ---------------------------
 
         [Fact]
@@ -128,7 +128,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("true", json); // isStored
+            Assert.Contains("true", json);
         }
 
         [Fact]
@@ -145,9 +145,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains($"{plant.Id}", json);
-            Assert.Contains("true", json); // isStored
+            Assert.Contains("true", json);
         }
-
 
         [Fact]
         public async Task GetStoredPlants_Denies_Other_User()
@@ -170,7 +169,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var user = EnsureSeedUser(UserRole.User, "gp_active_self", "gp_active_self@test.com");
             AuthenticateAs(user, "User");
             var gp = CreateGardenPlant(user.Id);
-            // flip to active
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -185,7 +183,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("false", json); // not stored
+            Assert.Contains("false", json);
         }
 
         [Fact]
@@ -200,7 +198,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("[]", json); // filtered out
+            Assert.Contains("[]", json);
         }
 
         [Fact]
@@ -219,9 +217,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         // ---------------------------
-        // Mutation tests
+        // Mutation Tests
         // ---------------------------
 
+        // --- Add ---
         [Fact]
         public async Task AddGardenPlant_Allows_Self()
         {
@@ -236,6 +235,24 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("gardenStateId", json);
+        }
+
+        [Fact]
+        public async Task AddGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_add_admin", "gp_add_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_add_target", "gp_add_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gs = CreateGardenState(user.Id);
+            var pt = CreatePlantType("AdminPlant");
+
+            var payload = new { query = $"mutation {{ addGardenPlant(gardenStateId:{gs.Id}, plantTypeId:{pt.Id}) {{ id gardenStateId plantTypeId }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains($"{gs.Id}", json);
+            Assert.Contains($"{pt.Id}", json);
         }
 
         [Fact]
@@ -254,6 +271,99 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        // --- Grow ---
+        [Fact]
+        public async Task GrowGardenPlant_Allows_Self()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_grow_self", "gp_grow_self@test.com");
+            AuthenticateAs(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("growthProgress", json);
+        }
+
+        [Fact]
+        public async Task GrowGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_grow_admin", "gp_grow_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_grow_target", "gp_grow_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}, growthMultiplier:2) {{ id growthProgress }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("growthProgress", json);
+        }
+
+        [Fact]
+        public async Task GrowGardenPlant_Returns_Null_When_Not_Found()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_grow_nf", "gp_grow_nf@test.com");
+            AuthenticateAs(user, "User");
+
+            var payload = new { query = "mutation { growGardenPlant(plantId:99999) { id growthProgress } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("null", json);
+        }
+
+        [Fact]
+        public async Task GrowGardenPlant_Denies_Other_User()
+        {
+            var u1 = EnsureSeedUser(UserRole.User, "gp_grow_u1", "gp_grow_u1@test.com");
+            var u2 = EnsureSeedUser(UserRole.User, "gp_grow_u2", "gp_grow_u2@test.com");
+            AuthenticateAs(u1, "User");
+            var gp = CreateGardenPlant(u2.Id);
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // --- Move ---
+        [Fact]
+        public async Task MoveGardenPlant_Allows_Self()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_move_self", "gp_move_self@test.com");
+            AuthenticateAs(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:5) {{ id order }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("5", json);
+        }
+
+        [Fact]
+        public async Task MoveGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_move_admin", "gp_move_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_move_target", "gp_move_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:3) {{ id order }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("3", json);
+        }
+
         [Fact]
         public async Task MoveGardenPlant_Returns_Null_When_Not_Found()
         {
@@ -266,48 +376,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("null", json);
-        }
-
-        [Fact]
-        public async Task StoreGardenPlant_Returns_Null_When_Not_Found()
-        {
-            var user = EnsureSeedUser(UserRole.User, "gp_store_nf", "gp_store_nf@test.com");
-            AuthenticateAs(user, "User");
-
-            var payload = new { query = "mutation { storeGardenPlant(plantId:99999) { id isStored } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadAsStringAsync();
-
-            Assert.Contains("null", json);
-        }
-
-        [Fact]
-        public async Task RestoreGardenPlant_Returns_Null_When_Not_Found()
-        {
-            var user = EnsureSeedUser(UserRole.User, "gp_restore_nf", "gp_restore_nf@test.com");
-            AuthenticateAs(user, "User");
-
-            var payload = new { query = "mutation { restoreGardenPlant(plantId:99999, newOrder:1) { id isStored } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadAsStringAsync();
-
-            Assert.Contains("null", json);
-        }
-
-        [Fact]
-        public async Task DeleteGardenPlant_Returns_False_When_Not_Found()
-        {
-            var user = EnsureSeedUser(UserRole.User, "gp_delete_nf", "gp_delete_nf@test.com");
-            AuthenticateAs(user, "User");
-
-            var payload = new { query = "mutation { deleteGardenPlant(id:99999) }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadAsStringAsync();
-
-            Assert.Contains("false", json);
         }
 
         [Fact]
@@ -325,6 +393,52 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        // --- Store ---
+        [Fact]
+        public async Task StoreGardenPlant_Allows_Self()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_store_self", "gp_store_self@test.com");
+            AuthenticateAs(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("true", json);
+        }
+
+        [Fact]
+        public async Task StoreGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_store_admin", "gp_store_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_store_target", "gp_store_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("true", json);
+        }
+
+        [Fact]
+        public async Task StoreGardenPlant_Returns_Null_When_Not_Found()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_store_nf", "gp_store_nf@test.com");
+            AuthenticateAs(user, "User");
+
+            var payload = new { query = "mutation { storeGardenPlant(plantId:99999) { id isStored } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("null", json);
+        }
+
         [Fact]
         public async Task StoreGardenPlant_Denies_Other_User()
         {
@@ -340,6 +454,54 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        // --- Restore ---
+        [Fact]
+        public async Task RestoreGardenPlant_Allows_Self()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_restore_self", "gp_restore_self@test.com");
+            AuthenticateAs(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:2) {{ id isStored order }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("false", json); // not stored
+            Assert.Contains("2", json);    // new order
+        }
+
+        [Fact]
+        public async Task RestoreGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_restore_admin", "gp_restore_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_restore_target", "gp_restore_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:4) {{ id isStored order }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("false", json);
+            Assert.Contains("4", json);
+        }
+
+        [Fact]
+        public async Task RestoreGardenPlant_Returns_Null_When_Not_Found()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_restore_nf", "gp_restore_nf@test.com");
+            AuthenticateAs(user, "User");
+
+            var payload = new { query = "mutation { restoreGardenPlant(plantId:99999, newOrder:1) { id isStored } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("null", json);
+        }
+
         [Fact]
         public async Task RestoreGardenPlant_Denies_Other_User()
         {
@@ -353,6 +515,52 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // --- Delete ---
+        [Fact]
+        public async Task DeleteGardenPlant_Allows_Self()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_delete_self", "gp_delete_self@test.com");
+            AuthenticateAs(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("true", json);
+        }
+
+        [Fact]
+        public async Task DeleteGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureSeedUser(UserRole.Admin, "gp_delete_admin", "gp_delete_admin@test.com");
+            var user = EnsureSeedUser(UserRole.User, "gp_delete_target", "gp_delete_target@test.com");
+            AuthenticateAs(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("true", json);
+        }
+
+        [Fact]
+        public async Task DeleteGardenPlant_Returns_False_When_Not_Found()
+        {
+            var user = EnsureSeedUser(UserRole.User, "gp_delete_nf", "gp_delete_nf@test.com");
+            AuthenticateAs(user, "User");
+
+            var payload = new { query = "mutation { deleteGardenPlant(id:99999) }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("false", json);
         }
 
         [Fact]
