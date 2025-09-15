@@ -49,13 +49,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
 
-            var tag = new EmotionTag
-            {
-                Name = name,
-                Color = color,
-                Icon = icon
-            };
-
+            var tag = new EmotionTag { Name = name, Color = color, Icon = icon };
             db.EmotionTags.Add(tag);
             db.SaveChanges();
             return tag.Id;
@@ -84,7 +78,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             CreateSeedPlantType("Tulip");
 
             var payload = new { query = "{ plantTypes { id name emotionTagId } }" };
-
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -102,6 +95,26 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task GetPlantTypes_Returns_Empty_When_No_Records()
+        {
+            AuthenticateAsAdmin();
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                db.PlantTypes.RemoveRange(db.PlantTypes);
+                db.SaveChanges();
+            }
+
+            var payload = new { query = "{ plantTypes { id name emotionTagId } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("[]", json);
         }
 
         [Fact]
@@ -148,17 +161,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // Mutation tests
         // ---------------------------
 
+        // --- Add ---
         [Fact]
         public async Task AddPlantType_Allows_Admin()
         {
             AuthenticateAsAdmin();
             var etid = CreateEmotionTag("Excited", "#00FF00");
 
-            var payload = new
-            {
-                query = $"mutation {{ addPlantType(name:\"Lily\", emotionTagId:{etid}) {{ id name emotionTagId }} }}"
-            };
-
+            var payload = new { query = $"mutation {{ addPlantType(name:\"Lily\", emotionTagId:{etid}) {{ id name emotionTagId }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -171,11 +181,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             AuthenticateAsUser();
             var etid = CreateEmotionTag("Blocked", "#0000FF");
-            var payload = new
-            {
-                query = $"mutation {{ addPlantType(name:\"Forbidden\", emotionTagId:{etid}) {{ id name }} }}"
-            };
 
+            var payload = new { query = $"mutation {{ addPlantType(name:\"Forbidden\", emotionTagId:{etid}) {{ id name }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -183,15 +190,25 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
+        public async Task AddPlantType_Returns_Error_When_EmotionTag_Invalid()
+        {
+            AuthenticateAsAdmin();
+            var payload = new { query = "mutation { addPlantType(name:\"BadPlant\", emotionTagId:99999) { id name } }" };
+
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("error", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // --- Update ---
+        [Fact]
         public async Task UpdatePlantType_Allows_Admin()
         {
             AuthenticateAsAdmin();
             var pt = CreateSeedPlantType("Orchid");
-            var payload = new
-            {
-                query = $"mutation {{ updatePlantType(id:{pt.Id}, name:\"UpdatedFlower\") {{ id name }} }}"
-            };
 
+            var payload = new { query = $"mutation {{ updatePlantType(id:{pt.Id}, name:\"UpdatedFlower\") {{ id name }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -204,11 +221,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             AuthenticateAsUser();
             var pt = CreateSeedPlantType("Peony");
-            var payload = new
-            {
-                query = $"mutation {{ updatePlantType(id:{pt.Id}, name:\"Hacked\") {{ id name }} }}"
-            };
 
+            var payload = new { query = $"mutation {{ updatePlantType(id:{pt.Id}, name:\"Hacked\") {{ id name }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -219,10 +233,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdatePlantType_Returns_Null_When_Id_Not_Found()
         {
             AuthenticateAsAdmin();
-            var payload = new
-            {
-                query = "mutation { updatePlantType(id:99999, name:\"Ghost\") { id name } }"
-            };
+            var payload = new { query = "mutation { updatePlantType(id:99999, name:\"Ghost\") { id name } }" };
 
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
@@ -231,13 +242,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("null", json);
         }
 
+        // --- Delete ---
         [Fact]
         public async Task DeletePlantType_Allows_Admin()
         {
             AuthenticateAsAdmin();
             var pt = CreateSeedPlantType("ToDelete");
-            var payload = new { query = $"mutation {{ deletePlantType(id:{pt.Id}) }}" };
 
+            var payload = new { query = $"mutation {{ deletePlantType(id:{pt.Id}) }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -250,8 +262,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             AuthenticateAsUser();
             var pt = CreateSeedPlantType("CantDelete");
-            var payload = new { query = $"mutation {{ deletePlantType(id:{pt.Id}) }}" };
 
+            var payload = new { query = $"mutation {{ deletePlantType(id:{pt.Id}) }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
