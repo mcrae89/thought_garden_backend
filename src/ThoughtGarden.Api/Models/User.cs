@@ -19,6 +19,8 @@ namespace ThoughtGarden.Models
         // Navigation
         public ICollection<GardenState> GardenStates { get; set; } = new List<GardenState>();
         public ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
+        public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
 
         public UserSettings? Settings { get; set; }
     }

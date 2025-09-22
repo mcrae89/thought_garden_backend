@@ -5,6 +5,7 @@ using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.Tests.Factories;
 using ThoughtGarden.Api.Tests.Utils;
 using ThoughtGarden.Models;
+using Xunit;
 
 namespace ThoughtGarden.Api.Tests.GraphQL
 {
@@ -22,71 +23,64 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) EnsureSeedUser(
-            UserRole role = UserRole.User,
+        private (int Id, string UserName, string Email) EnsureUser(
             string userName = "seeduser",
-            string email = "seed@test.com")
+            string email = "seed@test.com",
+            UserRole role = UserRole.User)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
 
-            var u = db.Users.SingleOrDefault(x => x.UserName == userName);
+            var u = db.Users.FirstOrDefault(x => x.UserName == userName);
             if (u == null)
             {
-                var planId = db.SubscriptionPlans.Select(p => p.Id).FirstOrDefault();
-                if (planId == 0) throw new InvalidOperationException("No subscription plan found.");
-
+                var planId = db.SubscriptionPlans.Select(p => p.Id).First();
                 u = new User
                 {
                     UserName = userName,
                     Email = email,
-                    PasswordHash = "x",
+                    PasswordHash = PasswordHelper.HashPassword("P@ssw0rd!"),
                     Role = role,
                     SubscriptionPlanId = planId
                 };
                 db.Users.Add(u);
                 db.SaveChanges();
             }
-
             return (u.Id, u.UserName, u.Email);
         }
 
-        private void AuthenticateAs((int Id, string UserName, string Email) user, string role)
+        private void Authenticate((int Id, string UserName, string Email) user, string role)
         {
             var token = JwtTokenGenerator.GenerateToken(
                 _factory.JwtKey, "TestIssuer", "TestAudience",
-                user.Id, user.UserName, user.Email, role: role);
+                user.Id, user.UserName, user.Email, role);
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
-        private GardenState CreateSeedGarden(int userId)
+        private GardenState CreateGardenState(int userId, int size = 5)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
             var gs = new GardenState
             {
                 UserId = userId,
                 SnapshotAt = DateTime.UtcNow,
-                Size = 5
+                Size = size
             };
-
             db.GardenStates.Add(gs);
             db.SaveChanges();
             return gs;
         }
 
         // ---------------------------
-        // Query tests
+        // Query Tests
         // ---------------------------
-
-        // --- GetGardens ---
         [Fact]
         public async Task GetGardens_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "garden_self", "garden_self@test.com");
-            AuthenticateAs(user, "User");
-            CreateSeedGarden(user.Id);
+            var user = EnsureUser("garden_self", "garden_self@test.com");
+            Authenticate(user, "User");
+            CreateGardenState(user.Id);
 
             var payload = new { query = $"{{ gardens(userId:{user.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -99,10 +93,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetGardens_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "garden_admin", "garden_admin@test.com");
-            var other = EnsureSeedUser(UserRole.User, "garden_other", "garden_other@test.com");
-            AuthenticateAs(admin, "Admin");
-            CreateSeedGarden(other.Id);
+            var admin = EnsureUser("garden_admin", "garden_admin@test.com", UserRole.Admin);
+            var other = EnsureUser("garden_other", "garden_other@test.com");
+            Authenticate(admin, "Admin");
+            CreateGardenState(other.Id);
 
             var payload = new { query = $"{{ gardens(userId:{other.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -115,10 +109,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetGardens_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "garden_u1", "garden_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "garden_u2", "garden_u2@test.com");
-            AuthenticateAs(u1, "User");
-            CreateSeedGarden(u2.Id);
+            var u1 = EnsureUser("garden_u1", "garden_u1@test.com");
+            var u2 = EnsureUser("garden_u2", "garden_u2@test.com");
+            Authenticate(u1, "User");
+            CreateGardenState(u2.Id);
 
             var payload = new { query = $"{{ gardens(userId:{u2.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -130,8 +124,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetGardens_Returns_Empty_When_None()
         {
-            var user = EnsureSeedUser(UserRole.User, "garden_none", "garden_none@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("garden_none", "garden_none@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = $"{{ gardens(userId:{user.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -141,76 +135,77 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("[]", json);
         }
 
-        // --- GetGardenById ---
         [Fact]
         public async Task GetGardenById_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "garden_byid_self", "garden_byid_self@test.com");
-            AuthenticateAs(user, "User");
-            var garden = CreateSeedGarden(user.Id);
+            var user = EnsureUser("garden_byid_self", "garden_byid_self@test.com");
+            Authenticate(user, "User");
+            var gs = CreateGardenState(user.Id);
 
-            var payload = new { query = $"{{ gardenById(id:{garden.Id}) {{ id userId size }} }}" };
+            var payload = new { query = $"{{ gardenById(id:{gs.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains($"{garden.Id}", json);
+            Assert.Contains($"{gs.Id}", json);
         }
 
         [Fact]
         public async Task GetGardenById_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "garden_byid_admin", "garden_byid_admin@test.com");
-            var other = EnsureSeedUser(UserRole.User, "garden_byid_other", "garden_byid_other@test.com");
-            AuthenticateAs(admin, "Admin");
-            var garden = CreateSeedGarden(other.Id);
+            var admin = EnsureUser("garden_byid_admin", "garden_byid_admin@test.com", UserRole.Admin);
+            var other = EnsureUser("garden_byid_other", "garden_byid_other@test.com");
+            Authenticate(admin, "Admin");
+            var gs = CreateGardenState(other.Id);
 
-            var payload = new { query = $"{{ gardenById(id:{garden.Id}) {{ id userId size }} }}" };
+            var payload = new { query = $"{{ gardenById(id:{gs.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains($"{garden.Id}", json);
+            Assert.Contains($"{gs.Id}", json);
         }
 
         [Fact]
         public async Task GetGardenById_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "garden_byid_u1", "garden_byid_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "garden_byid_u2", "garden_byid_u2@test.com");
-            AuthenticateAs(u1, "User");
-            var garden = CreateSeedGarden(u2.Id);
+            var u1 = EnsureUser("garden_byid_u1", "garden_byid_u1@test.com");
+            var u2 = EnsureUser("garden_byid_u2", "garden_byid_u2@test.com");
+            Authenticate(u1, "User");
+            var gs = CreateGardenState(u2.Id);
 
-            var payload = new { query = $"{{ gardenById(id:{garden.Id}) {{ id userId size }} }}" };
+            var payload = new { query = $"{{ gardenById(id:{gs.Id}) {{ id userId size }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("[]", json);
+            // Expect an authorization error in the response
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
         public async Task GetGardenById_Returns_Empty_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.Admin, "garden_byid_nf", "garden_byid_nf@test.com");
-            AuthenticateAs(user, "Admin");
+            var admin = EnsureUser("garden_byid_nf", "garden_byid_nf@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
             var payload = new { query = "{ gardenById(id:99999) { id userId size } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("[]", json);
+            // GraphQL now returns null instead of []
+            Assert.Contains("\"gardenById\":null", json);
         }
 
-        // ---------------------------
-        // Mutation tests
-        // ---------------------------
 
+        // ---------------------------
+        // Mutation Tests
+        // ---------------------------
         [Fact]
         public async Task CreateGardenState_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "garden_create", "garden_create@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("garden_create", "garden_create@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { createGardenState { id userId size } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -223,8 +218,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task CreateGardenState_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "garden_create_admin", "garden_create_admin@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("garden_create_admin", "garden_create_admin@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
             var payload = new { query = "mutation { createGardenState { id userId size } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);

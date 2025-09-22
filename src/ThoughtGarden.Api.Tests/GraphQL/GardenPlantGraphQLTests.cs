@@ -5,6 +5,7 @@ using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.Tests.Factories;
 using ThoughtGarden.Api.Tests.Utils;
 using ThoughtGarden.Models;
+using Xunit;
 
 namespace ThoughtGarden.Api.Tests.GraphQL
 {
@@ -22,45 +23,40 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) EnsureSeedUser(UserRole role, string userName, string email)
+        private (int Id, string UserName, string Email) EnsureUser(string userName, string email, UserRole role = UserRole.User)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
-            var u = db.Users.SingleOrDefault(x => x.UserName == userName);
+            var u = db.Users.FirstOrDefault(x => x.UserName == userName);
             if (u == null)
             {
-                var planId = db.SubscriptionPlans.Select(p => p.Id).FirstOrDefault();
-                if (planId == 0) throw new InvalidOperationException("No subscription plan found.");
-
+                var planId = db.SubscriptionPlans.Select(p => p.Id).First();
                 u = new User
                 {
                     UserName = userName,
                     Email = email,
-                    PasswordHash = "x",
+                    PasswordHash = PasswordHelper.HashPassword("P@ssw0rd!"),
                     Role = role,
                     SubscriptionPlanId = planId
                 };
                 db.Users.Add(u);
                 db.SaveChanges();
             }
-
             return (u.Id, u.UserName, u.Email);
         }
 
-        private void AuthenticateAs((int Id, string UserName, string Email) user, string role)
+        private void Authenticate((int Id, string UserName, string Email) user, string role)
         {
             var token = JwtTokenGenerator.GenerateToken(
                 _factory.JwtKey, "TestIssuer", "TestAudience",
-                user.Id, user.UserName, user.Email, role: role);
+                user.Id, user.UserName, user.Email, role);
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
-        private int CreateEmotionTag(string name = "Joy", string color = "#00FF00")
+        private int CreateEmotionTag(string name = "Happy", string color = "#00FF00")
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
             var tag = new EmotionTag { Name = name, Color = color };
             db.EmotionTags.Add(tag);
             db.SaveChanges();
@@ -71,8 +67,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
-            var etid = CreateEmotionTag("Happy");
+            var etid = CreateEmotionTag("Joy");
             var pt = new PlantType { Name = name, EmotionTagId = etid };
             db.PlantTypes.Add(pt);
             db.SaveChanges();
@@ -83,8 +78,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
-            var gs = new GardenState { UserId = userId, SnapshotAt = DateTime.UtcNow };
+            var gs = new GardenState { UserId = userId, SnapshotAt = DateTime.UtcNow, Size = 5 };
             db.GardenStates.Add(gs);
             db.SaveChanges();
             return gs;
@@ -92,12 +86,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
         private GardenPlant CreateGardenPlant(int userId, string plantName = "Tulip")
         {
-            using var scope = _factory.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
             var gs = CreateGardenState(userId);
             var pt = CreatePlantType(plantName);
 
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
             var gp = new GardenPlant
             {
                 GardenStateId = gs.Id,
@@ -106,7 +99,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 UpdatedAt = DateTime.UtcNow,
                 IsStored = true
             };
-
             db.GardenPlants.Add(gp);
             db.SaveChanges();
             return gp;
@@ -119,8 +111,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetStoredPlants_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_self", "gp_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_self", "gp_self@test.com");
+            Authenticate(user, "User");
             CreateGardenPlant(user.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{user.Id}) {{ id gardenStateId plantTypeId isStored }} }}" };
@@ -134,9 +126,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetStoredPlants_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_admin", "gp_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_user", "gp_user@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_admin", "gp_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_user", "gp_user@test.com");
+            Authenticate(admin, "Admin");
             var plant = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{user.Id}) {{ id gardenStateId plantTypeId isStored }} }}" };
@@ -151,9 +143,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetStoredPlants_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_u1", "gp_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_u2", "gp_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_u1", "gp_u1@test.com");
+            var u2 = EnsureUser("gp_u2", "gp_u2@test.com");
+            Authenticate(u1, "User");
             CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{u2.Id}) {{ id }} }}" };
@@ -166,9 +158,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetActivePlants_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_active_self", "gp_active_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_active_self", "gp_active_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
+
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -189,9 +182,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetActivePlants_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_act_u1", "gp_act_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_act_u2", "gp_act_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_act_u1", "gp_act_u1@test.com");
+            var u2 = EnsureUser("gp_act_u2", "gp_act_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"{{ activePlants(gardenStateId:{gp.GardenStateId}) {{ id order }} }}" };
@@ -204,8 +197,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetActivePlants_Returns_Empty_When_None()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_empty", "gp_empty@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_empty", "gp_empty@test.com");
+            Authenticate(user, "User");
             var gs = CreateGardenState(user.Id);
 
             var payload = new { query = $"{{ activePlants(gardenStateId:{gs.Id}) {{ id order }} }}" };
@@ -220,12 +213,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // Mutation Tests
         // ---------------------------
 
-        // --- Add ---
         [Fact]
         public async Task AddGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_add_self", "gp_add_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_add_self", "gp_add_self@test.com");
+            Authenticate(user, "User");
             var gs = CreateGardenState(user.Id);
             var pt = CreatePlantType("Lily");
 
@@ -240,9 +232,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task AddGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_add_admin", "gp_add_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_add_target", "gp_add_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_add_admin", "gp_add_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_add_target", "gp_add_target@test.com");
+            Authenticate(admin, "Admin");
             var gs = CreateGardenState(user.Id);
             var pt = CreatePlantType("AdminPlant");
 
@@ -258,9 +250,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task AddGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_add_u1", "gp_add_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_add_u2", "gp_add_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_add_u1", "gp_add_u1@test.com");
+            var u2 = EnsureUser("gp_add_u2", "gp_add_u2@test.com");
+            Authenticate(u1, "User");
             var gs = CreateGardenState(u2.Id);
             var pt = CreatePlantType("Blocked");
 
@@ -271,12 +263,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // --- Grow ---
         [Fact]
         public async Task GrowGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_grow_self", "gp_grow_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_grow_self", "gp_grow_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
@@ -290,9 +281,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GrowGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_grow_admin", "gp_grow_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_grow_target", "gp_grow_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_grow_admin", "gp_grow_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_grow_target", "gp_grow_target@test.com");
+            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}, growthMultiplier:2) {{ id growthProgress }} }}" };
@@ -306,8 +297,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GrowGardenPlant_Returns_Null_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_grow_nf", "gp_grow_nf@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_grow_nf", "gp_grow_nf@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { growGardenPlant(plantId:99999) { id growthProgress } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -320,9 +311,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GrowGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_grow_u1", "gp_grow_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_grow_u2", "gp_grow_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_grow_u1", "gp_grow_u1@test.com");
+            var u2 = EnsureUser("gp_grow_u2", "gp_grow_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
@@ -332,12 +323,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // --- Move ---
         [Fact]
         public async Task MoveGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_move_self", "gp_move_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_move_self", "gp_move_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:5) {{ id order }} }}" };
@@ -351,9 +341,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task MoveGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_move_admin", "gp_move_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_move_target", "gp_move_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_move_admin", "gp_move_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_move_target", "gp_move_target@test.com");
+            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:3) {{ id order }} }}" };
@@ -367,8 +357,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task MoveGardenPlant_Returns_Null_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_move_nf", "gp_move_nf@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_move_nf", "gp_move_nf@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { moveGardenPlant(plantId:99999, newOrder:1) { id order } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -381,9 +371,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task MoveGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_move_u1", "gp_move_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_move_u2", "gp_move_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_move_u1", "gp_move_u1@test.com");
+            var u2 = EnsureUser("gp_move_u2", "gp_move_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:5) {{ id order }} }}" };
@@ -393,12 +383,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // --- Store ---
         [Fact]
         public async Task StoreGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_store_self", "gp_store_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_store_self", "gp_store_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
@@ -412,9 +401,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task StoreGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_store_admin", "gp_store_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_store_target", "gp_store_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_store_admin", "gp_store_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_store_target", "gp_store_target@test.com");
+            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
@@ -428,8 +417,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task StoreGardenPlant_Returns_Null_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_store_nf", "gp_store_nf@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_store_nf", "gp_store_nf@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { storeGardenPlant(plantId:99999) { id isStored } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -442,9 +431,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task StoreGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_store_u1", "gp_store_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_store_u2", "gp_store_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_store_u1", "gp_store_u1@test.com");
+            var u2 = EnsureUser("gp_store_u2", "gp_store_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
@@ -454,12 +443,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // --- Restore ---
+        // ---------------------------
+        // Restore
+        // ---------------------------
         [Fact]
         public async Task RestoreGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_restore_self", "gp_restore_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_restore_self", "gp_restore_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:2) {{ id isStored order }} }}" };
@@ -467,16 +458,16 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("false", json); // not stored
-            Assert.Contains("2", json);    // new order
+            Assert.Contains("false", json); // not stored anymore
+            Assert.Contains("2", json);     // moved to order 2
         }
 
         [Fact]
         public async Task RestoreGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_restore_admin", "gp_restore_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_restore_target", "gp_restore_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_restore_admin", "gp_restore_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_restore_target", "gp_restore_target@test.com");
+            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:4) {{ id isStored order }} }}" };
@@ -491,8 +482,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task RestoreGardenPlant_Returns_Null_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_restore_nf", "gp_restore_nf@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_restore_nf", "gp_restore_nf@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { restoreGardenPlant(plantId:99999, newOrder:1) { id isStored } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -505,9 +496,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task RestoreGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_restore_u1", "gp_restore_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_restore_u2", "gp_restore_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_restore_u1", "gp_restore_u1@test.com");
+            var u2 = EnsureUser("gp_restore_u2", "gp_restore_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:2) {{ id isStored }} }}" };
@@ -517,12 +508,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // --- Delete ---
+        // ---------------------------
+        // Delete
+        // ---------------------------
         [Fact]
         public async Task DeleteGardenPlant_Allows_Self()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_delete_self", "gp_delete_self@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_delete_self", "gp_delete_self@test.com");
+            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
@@ -536,9 +529,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteGardenPlant_Allows_Admin()
         {
-            var admin = EnsureSeedUser(UserRole.Admin, "gp_delete_admin", "gp_delete_admin@test.com");
-            var user = EnsureSeedUser(UserRole.User, "gp_delete_target", "gp_delete_target@test.com");
-            AuthenticateAs(admin, "Admin");
+            var admin = EnsureUser("gp_delete_admin", "gp_delete_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_delete_target", "gp_delete_target@test.com");
+            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
@@ -552,8 +545,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteGardenPlant_Returns_False_When_Not_Found()
         {
-            var user = EnsureSeedUser(UserRole.User, "gp_delete_nf", "gp_delete_nf@test.com");
-            AuthenticateAs(user, "User");
+            var user = EnsureUser("gp_delete_nf", "gp_delete_nf@test.com");
+            Authenticate(user, "User");
 
             var payload = new { query = "mutation { deleteGardenPlant(id:99999) }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -566,9 +559,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteGardenPlant_Denies_Other_User()
         {
-            var u1 = EnsureSeedUser(UserRole.User, "gp_delete_u1", "gp_delete_u1@test.com");
-            var u2 = EnsureSeedUser(UserRole.User, "gp_delete_u2", "gp_delete_u2@test.com");
-            AuthenticateAs(u1, "User");
+            var u1 = EnsureUser("gp_delete_u1", "gp_delete_u1@test.com");
+            var u2 = EnsureUser("gp_delete_u2", "gp_delete_u2@test.com");
+            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };

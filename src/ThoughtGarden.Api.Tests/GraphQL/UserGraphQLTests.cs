@@ -24,34 +24,40 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) GetSeedUser()
+        private (int Id, string UserName, string Email) EnsureSeedUser(
+            UserRole role = UserRole.User,
+            string userName = "seeduser",
+            string email = "seed@test.com")
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
 
-            var u = db.Users.SingleOrDefault(x => x.UserName == "seeduser")
-                ?? throw new InvalidOperationException("Seed user not found. Ensure ApiFactory seeding runs.");
+            var u = db.Users.SingleOrDefault(x => x.UserName == userName);
+            if (u == null)
+            {
+                var planId = db.SubscriptionPlans.Select(p => p.Id).FirstOrDefault();
+                if (planId == 0) throw new InvalidOperationException("No subscription plan found.");
+
+                u = new User
+                {
+                    UserName = userName,
+                    Email = email,
+                    PasswordHash = "x",
+                    Role = role,
+                    SubscriptionPlanId = planId
+                };
+                db.Users.Add(u);
+                db.SaveChanges();
+            }
 
             return (u.Id, u.UserName, u.Email);
         }
 
-        private void AuthenticateAsUser()
+        private void AuthenticateAs((int Id, string UserName, string Email) user, string role)
         {
-            var u = GetSeedUser();
             var token = JwtTokenGenerator.GenerateToken(
                 _factory.JwtKey, "TestIssuer", "TestAudience",
-                u.Id, u.UserName, u.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-
-        private void AuthenticateAsAdmin()
-        {
-            var u = GetSeedUser();
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                u.Id, u.UserName, u.Email, role: "Admin");
-
+                user.Id, user.UserName, user.Email, role: role);
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
@@ -81,11 +87,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Query Tests
         // ---------------------------
-
         [Fact]
         public async Task GetProfile_Returns_SeededUser_As_User()
         {
-            AuthenticateAsUser();
+            var user = EnsureSeedUser();
+            AuthenticateAs(user, "User");
 
             var payload = new { query = "{ profile { userName email } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -101,16 +107,16 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var payload = new { query = "{ profile { userName email } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode();
-
             var json = await resp.Content.ReadAsStringAsync();
+
             Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
         public async Task GetUsers_Returns_SeededUser_As_Admin()
         {
-            AuthenticateAsAdmin();
+            var admin = EnsureSeedUser(UserRole.Admin, "admin_users", "admin_users@test.com");
+            AuthenticateAs(admin, "Admin");
 
             var payload = new { query = "{ users { userName email } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -125,11 +131,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetUsers_Fails_For_Normal_User()
         {
             var temp = CreateTempUser("normal_for_getusers", "normal_for_getusers@test.com");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                temp.Id, temp.UserName, temp.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(temp, "User");
 
             var payload = new { query = "{ users { userName email } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -152,9 +154,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetUserById_Returns_SeededUser_As_Admin()
         {
-            AuthenticateAsAdmin();
-            var seed = GetSeedUser();
+            var admin = EnsureSeedUser(UserRole.Admin, "admin_userbyid", "admin_userbyid@test.com");
+            AuthenticateAs(admin, "Admin");
 
+            var seed = EnsureSeedUser();
             var payload = new { query = $"{{ userById(id: {seed.Id}) {{ userName email }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
@@ -168,11 +171,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetUserById_Fails_For_Normal_User()
         {
             var normal = CreateTempUser("normal_for_getuserbyid", "normal_for_getuserbyid@test.com");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                normal.Id, normal.UserName, normal.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(normal, "User");
 
             var victim = CreateTempUser("victim_for_getuserbyid", "victim_for_getuserbyid@test.com");
             var payload = new { query = $"{{ userById(id: {victim.Id}) {{ userName email }} }}" };
@@ -196,14 +195,13 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Mutation Tests - Update
         // ---------------------------
-
         [Fact]
         public async Task UpdateUser_Allows_Self_Update()
         {
-            AuthenticateAsUser();
-            var seed = GetSeedUser();
+            var user = EnsureSeedUser();
+            AuthenticateAs(user, "User");
 
-            var payload = new { query = $"mutation {{ updateUser(id: {seed.Id}, userName: \"updatedName\") {{ userName email }} }}" };
+            var payload = new { query = $"mutation {{ updateUser(id: {user.Id}, userName: \"updatedName\") {{ userName email }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
 
@@ -214,9 +212,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateUser_Allows_Admin_Update_Other_User()
         {
-            AuthenticateAsAdmin();
-            var other = CreateTempUser("otheruser_update", "other_update@test.com");
+            var admin = EnsureSeedUser(UserRole.Admin, "admin_update", "admin_update@test.com");
+            AuthenticateAs(admin, "Admin");
 
+            var other = CreateTempUser("otheruser_update", "other_update@test.com");
             var payload = new { query = $"mutation {{ updateUser(id: {other.Id}, userName: \"adminUpdated\") {{ userName email }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
@@ -228,9 +227,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateUser_Fails_For_Normal_User_Updating_Other()
         {
-            AuthenticateAsUser();
-            var other = CreateTempUser("otheruser_block", "other_block@test.com");
+            var user = EnsureSeedUser(UserRole.User, "user_updatefail", "user_updatefail@test.com");
+            AuthenticateAs(user, "User");
 
+            var other = CreateTempUser("otheruser_block", "other_block@test.com");
             var payload = new { query = $"mutation {{ updateUser(id: {other.Id}, userName: \"hacker\") {{ userName email }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
@@ -252,16 +252,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Mutation Tests - Delete
         // ---------------------------
-
         [Fact]
         public async Task DeleteUser_Allows_Self_Delete()
         {
             var temp = CreateTempUser("selfdelete", "selfdelete@test.com");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                temp.Id, temp.UserName, temp.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(temp, "User");
 
             var payload = new { query = $"mutation {{ deleteUser(id: {temp.Id}) }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -274,9 +269,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteUser_Allows_Admin_Delete_Other()
         {
-            AuthenticateAsAdmin();
-            var other = CreateTempUser("admindelete", "admindelete@test.com");
+            var admin = EnsureSeedUser(UserRole.Admin, "admin_delete", "admin_delete@test.com");
+            AuthenticateAs(admin, "Admin");
 
+            var other = CreateTempUser("admindelete", "admindelete@test.com");
             var payload = new { query = $"mutation {{ deleteUser(id: {other.Id}) }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             resp.EnsureSuccessStatusCode();
@@ -289,11 +285,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteUser_Fails_For_Normal_User_Deleting_Other()
         {
             var normal = CreateTempUser("normal_for_delete", "normal_for_delete@test.com");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                normal.Id, normal.UserName, normal.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(normal, "User");
 
             var victim = CreateTempUser("victim_delete", "victim_delete@test.com");
             var payload = new { query = $"mutation {{ deleteUser(id: {victim.Id}) }}" };
@@ -317,16 +309,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Mutation Tests - Password
         // ---------------------------
-
         [Fact]
         public async Task UpdatePassword_Succeeds_For_Self_With_Correct_Current()
         {
             var temp = CreateTempUser("pw_ok", "pw_ok@test.com", plainPassword: "OldPass123!");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                temp.Id, temp.UserName, temp.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(temp, "User");
 
             var payload = new { query = "mutation { updatePassword(currentPassword:\"OldPass123!\", newPassword:\"NewPass456!\") }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -340,11 +327,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdatePassword_Fails_With_Wrong_Current()
         {
             var temp = CreateTempUser("pw_bad", "pw_bad@test.com", plainPassword: "OldPass123!");
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                temp.Id, temp.UserName, temp.Email, role: "User");
-
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            AuthenticateAs(temp, "User");
 
             var payload = new { query = "mutation { updatePassword(currentPassword:\"WRONG!\", newPassword:\"NewPass456!\") }" };
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
@@ -367,7 +350,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Mutation Tests - Auth
         // ---------------------------
-
         [Fact]
         public async Task RegisterUser_Succeeds_And_Can_Login()
         {

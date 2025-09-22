@@ -343,6 +343,11 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("IV")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("iv");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
@@ -380,9 +385,10 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 1,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IV = "cBHSM6AUxhuJsCIyMAvklg==",
                             IsDeleted = false,
                             MoodId = 1,
-                            Text = "Feeling happy and accomplished today.",
+                            Text = "j2mTHKGDmOn4hlryKv3eyL6P4ShFRRYdOQLuh1RDZeElQcHsZqKDdVzEWai9iAN/",
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 1
                         },
@@ -390,9 +396,10 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 2,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IV = "qwA2K9DHJfAGik2wzQrEug==",
                             IsDeleted = false,
                             MoodId = 3,
-                            Text = "Got frustrated with a bug, but resolved it.",
+                            Text = "taR9XokdNP9nxTZwNRwJbZHmLwZdWhmf4UOa5QPfVGIUx7whOYwf06Sd6G+D0Ebl",
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 1
                         },
@@ -400,9 +407,10 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 3,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IV = "z37o+Qx3yP7xJLBmeELwjw==",
                             IsDeleted = false,
                             MoodId = 2,
-                            Text = "Sad about the weather, it's been gloomy.",
+                            Text = "msYvFrmn0F4ZBLqmhmlRNAmIREbkViB8Pan6nrjkLl17bDzUWLDO7hp1zYLjI49o",
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 2
                         },
@@ -410,9 +418,10 @@ namespace ThoughtGarden.Api.Migrations
                         {
                             Id = 4,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IV = "5dBrHWrNm2LMqfFfTIN6ww==",
                             IsDeleted = false,
                             MoodId = 4,
-                            Text = "Went for a walk and felt calm afterward.",
+                            Text = "PR4aADhdP/4lmVSQbFkdQSpLmYFqOE1ue9MbvxfZ8DDeah/cIlYWmcmIuWBpsb6o",
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserId = 2
                         });
@@ -615,7 +624,7 @@ namespace ThoughtGarden.Api.Migrations
             modelBuilder.Entity("PlantType", b =>
                 {
                     b.HasOne("ThoughtGarden.Models.EmotionTag", "EmotionTag")
-                        .WithMany()
+                        .WithMany("PlantTypes")
                         .HasForeignKey("EmotionTagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
@@ -648,7 +657,7 @@ namespace ThoughtGarden.Api.Migrations
             modelBuilder.Entity("ThoughtGarden.Models.GardenPlant", b =>
                 {
                     b.HasOne("ThoughtGarden.Models.GardenState", "GardenState")
-                        .WithMany("Plants")
+                        .WithMany("GardenPlants")
                         .HasForeignKey("GardenStateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
@@ -683,6 +692,7 @@ namespace ThoughtGarden.Api.Migrations
                     b.HasOne("ThoughtGarden.Models.EmotionTag", "Mood")
                         .WithMany()
                         .HasForeignKey("MoodId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_journal_entries_emotion_tags_mood_id");
 
                     b.HasOne("ThoughtGarden.Models.User", "User")
@@ -700,7 +710,7 @@ namespace ThoughtGarden.Api.Migrations
             modelBuilder.Entity("ThoughtGarden.Models.RefreshToken", b =>
                 {
                     b.HasOne("ThoughtGarden.Models.User", "User")
-                        .WithMany()
+                        .WithMany("RefreshTokens")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
@@ -741,11 +751,13 @@ namespace ThoughtGarden.Api.Migrations
             modelBuilder.Entity("ThoughtGarden.Models.EmotionTag", b =>
                 {
                     b.Navigation("EntryLinks");
+
+                    b.Navigation("PlantTypes");
                 });
 
             modelBuilder.Entity("ThoughtGarden.Models.GardenState", b =>
                 {
-                    b.Navigation("Plants");
+                    b.Navigation("GardenPlants");
                 });
 
             modelBuilder.Entity("ThoughtGarden.Models.JournalEntry", b =>
@@ -763,6 +775,8 @@ namespace ThoughtGarden.Api.Migrations
                     b.Navigation("GardenStates");
 
                     b.Navigation("JournalEntries");
+
+                    b.Navigation("RefreshTokens");
 
                     b.Navigation("Settings");
                 });

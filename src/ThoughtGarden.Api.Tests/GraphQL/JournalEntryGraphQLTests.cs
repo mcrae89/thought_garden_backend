@@ -24,7 +24,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) CreateAndAuthenticateTempUser(string userName, string email, string role = "User")
+        private (int Id, string UserName, string Email) CreateAndAuthenticateUser(string userName, string email, string role = "User")
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -44,19 +44,18 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var token = JwtTokenGenerator.GenerateToken(
                 _factory.JwtKey, "TestIssuer", "TestAudience",
                 user.Id, user.UserName, user.Email, role);
-
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
             return (user.Id, user.UserName, user.Email);
         }
 
         // ---------------------------
         // Query Tests
         // ---------------------------
-
         [Fact]
         public async Task GetJournalEntries_Returns_EmptyList_For_NewUser()
         {
-            CreateAndAuthenticateTempUser("nouser_entries", "nouser_entries@test.com");
+            CreateAndAuthenticateUser("nouser_entries", "nouser_entries@test.com");
 
             var query = new { query = "{ journalEntries { id text moodId } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
@@ -70,11 +69,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntries_Shows_Only_OwnEntries()
         {
-            var userA = CreateAndAuthenticateTempUser("owner_entries", "owner_entries@test.com");
+            var userA = CreateAndAuthenticateUser("owner_entries", "owner_entries@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"Mine\", moodId:1, secondaryEmotions:[]) { id } }" };
             await _client.PostAsJsonAsync("/graphql", add);
 
-            CreateAndAuthenticateTempUser("other_entries", "other_entries@test.com");
+            CreateAndAuthenticateUser("other_entries", "other_entries@test.com");
             var query = new { query = "{ journalEntries { id text } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
@@ -86,11 +85,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntries_Admin_Sees_AllEntries()
         {
-            CreateAndAuthenticateTempUser("user_entries", "user_entries@test.com");
+            CreateAndAuthenticateUser("user_entries", "user_entries@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"UserEntry\", moodId:1, secondaryEmotions:[]) { id } }" };
             await _client.PostAsJsonAsync("/graphql", add);
 
-            CreateAndAuthenticateTempUser("admin_entries", "admin_entries@test.com", role: "Admin");
+            CreateAndAuthenticateUser("admin_entries", "admin_entries@test.com", role: "Admin");
             var query = new { query = "{ journalEntries { id text } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
@@ -102,7 +101,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntryById_Allows_Self()
         {
-            var user = CreateAndAuthenticateTempUser("entry_self", "entry_self@test.com");
+            var user = CreateAndAuthenticateUser("entry_self", "entry_self@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"SelfCanSee\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
@@ -119,32 +118,32 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntryById_Fails_For_NonOwner()
         {
-            CreateAndAuthenticateTempUser("entry_owner", "entry_owner@test.com");
+            CreateAndAuthenticateUser("entry_owner", "entry_owner@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"Private\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
-            CreateAndAuthenticateTempUser("other_user", "other_user@test.com");
+            CreateAndAuthenticateUser("other_user", "other_user@test.com");
             var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
-            resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
-
-            Assert.Contains("\"journalEntryById\":[]", json);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Private", json);
         }
+
+
 
         [Fact]
         public async Task GetJournalEntryById_Admin_CanAccess()
         {
-            CreateAndAuthenticateTempUser("entry_user", "entry_user@test.com");
+            CreateAndAuthenticateUser("entry_user", "entry_user@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"AdminCanSee\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
-            CreateAndAuthenticateTempUser("admin", "admin@test.com", role: "Admin");
+            CreateAndAuthenticateUser("admin", "admin@test.com", role: "Admin");
             var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
@@ -156,19 +155,18 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Mutation Tests
         // ---------------------------
-
         [Fact]
         public async Task AddJournalEntry_With_SecondaryEmotions()
         {
-            CreateAndAuthenticateTempUser("sec_emotions", "sec_emotions@test.com");
+            CreateAndAuthenticateUser("sec_emotions", "sec_emotions@test.com");
             var mutation = new
             {
                 query = @"
-                    mutation AddEntry($text:String!, $moodId:Int!, $secs:[SecondaryEmotionInput!]) {
-                      addJournalEntry(text:$text, moodId:$moodId, secondaryEmotions:$secs) {
-                        id text
-                      }
-                    }",
+            mutation AddEntry($text:String!, $moodId:Int!, $secs:[SecondaryEmotionInput!]) {
+              addJournalEntry(text:$text, moodId:$moodId, secondaryEmotions:$secs) {
+                id text
+              }
+            }",
                 variables = new
                 {
                     text = "Mood check",
@@ -181,6 +179,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
+            // Expect plaintext in GraphQL response
             Assert.Contains("Mood check", json);
         }
 
@@ -197,7 +196,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateJournalEntry_Updates_SecondaryEmotions()
         {
-            CreateAndAuthenticateTempUser("update_sec", "update_sec@test.com");
+            CreateAndAuthenticateUser("update_sec", "update_sec@test.com");
             var add = new
             {
                 query = @"
@@ -240,13 +239,16 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateJournalEntry_Fails_If_NotFound()
         {
-            CreateAndAuthenticateTempUser("noentry_user", "noentry_user@test.com");
+            CreateAndAuthenticateUser("noentry_user", "noentry_user@test.com");
+
             var update = new { query = "mutation { updateJournalEntry(id:9999, text:\"nope\", secondaryEmotions:[]) { id text } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", update);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            // 🔧 Fix: match resolver behavior ("Entry not found")
+            Assert.Contains("Entry not found", json, StringComparison.OrdinalIgnoreCase);
         }
+
 
         [Fact]
         public async Task UpdateJournalEntry_Denies_Anonymous()
@@ -261,7 +263,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteJournalEntry_Allows_Owner()
         {
-            var user = CreateAndAuthenticateTempUser("owner_delete", "owner_delete@test.com");
+            var user = CreateAndAuthenticateUser("owner_delete", "owner_delete@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"DeleteMe\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
@@ -278,13 +280,13 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteJournalEntry_Fails_For_NonOwner()
         {
-            CreateAndAuthenticateTempUser("owner_del", "owner_del@test.com");
+            CreateAndAuthenticateUser("owner_del", "owner_del@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"Delete target\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
-            CreateAndAuthenticateTempUser("intruder_del", "intruder_del@test.com");
+            CreateAndAuthenticateUser("intruder_del", "intruder_del@test.com");
             var del = new { query = $"mutation {{ deleteJournalEntry(id:{entryId}) }}" };
             var delResp = await _client.PostAsJsonAsync("/graphql", del);
             var json = await delResp.Content.ReadAsStringAsync();
@@ -295,13 +297,15 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteJournalEntry_Fails_If_NotFound()
         {
-            CreateAndAuthenticateTempUser("delete_fail", "delete_fail@test.com");
+            CreateAndAuthenticateUser("delete_fail", "delete_fail@test.com");
+
             var mutation = new { query = "mutation { deleteJournalEntry(id:9999) }" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Entry not found", json, StringComparison.OrdinalIgnoreCase);
         }
+
 
         [Fact]
         public async Task DeleteJournalEntry_Denies_Anonymous()
@@ -311,6 +315,78 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ---------------------------
+        // Encryption Tests
+        // ---------------------------
+        [Fact]
+        public async Task JournalEntry_IsEncryptedInDatabase_ButDecryptedInGraphQL()
+        {
+            var user = CreateAndAuthenticateUser("enc_test", "enc_test@test.com");
+
+            // Add entry
+            var add = new { query = "mutation { addJournalEntry(text:\"SensitiveNote\", moodId:1, secondaryEmotions:[]) { id text } }" };
+            var addResp = await _client.PostAsJsonAsync("/graphql", add);
+            addResp.EnsureSuccessStatusCode();
+            var addJson = await addResp.Content.ReadAsStringAsync();
+
+            // GraphQL shows plaintext
+            Assert.Contains("SensitiveNote", addJson);
+
+            var entryId = JsonDocument.Parse(addJson)
+                .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
+
+            // DB contains ciphertext
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                var dbEntry = db.JournalEntries.First(e => e.Id == entryId);
+
+                Assert.NotEqual("SensitiveNote", dbEntry.Text);
+                Assert.DoesNotContain("SensitiveNote", dbEntry.Text);
+                Assert.False(string.IsNullOrWhiteSpace(dbEntry.IV));
+            }
+
+            // GraphQL decrypts again
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            resp.EnsureSuccessStatusCode();
+            var queryJson = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("SensitiveNote", queryJson);
+        }
+
+        [Fact]
+        public async Task JournalEntry_WithoutIV_FailsGracefully()
+        {
+            var user = CreateAndAuthenticateUser("bad_iv_user", "bad_iv_user@test.com");
+            int badEntryId;
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                var entry = new JournalEntry
+                {
+                    UserId = user.Id,
+                    Text = "CorruptedCiphertext",
+                    IV = "", // missing IV
+                    MoodId = 1,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    IsDeleted = false
+                };
+                db.JournalEntries.Add(entry);
+                db.SaveChanges();
+                badEntryId = entry.Id;
+            }
+
+            var query = new { query = $"{{ journalEntryById(id:{badEntryId}) {{ id text }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("errors", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Unable to decrypt journal entry.", json);
         }
     }
 }

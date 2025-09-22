@@ -11,5 +11,7 @@ namespace ThoughtGarden.Models
 
         // Many-to-many via EntryEmotion (secondary emotions)
         public ICollection<EntryEmotion> EntryLinks { get; set; } = new List<EntryEmotion>();
+        public ICollection<PlantType> PlantTypes { get; set; } = new List<PlantType>();
+
     }
 }

@@ -19,13 +19,20 @@ namespace ThoughtGarden.Api.GraphQL.Queries
         }
 
         [Authorize]
-        [UseProjection]
-        public IQueryable<GardenState> GetGardenById(int id, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db)
+        public GardenState? GetGardenById(int id, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db)
         {
             var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = claims.FindFirstValue(ClaimTypes.Role);
             var isAdmin = role == UserRole.Admin.ToString();
-            return db.GardenStates.Where(gs => gs.Id == id && (isAdmin || gs.UserId == callerId));
+
+            var garden = db.GardenStates.FirstOrDefault(g => g.Id == id);
+            if (garden == null) return null;
+
+            if (!isAdmin && garden.UserId != callerId)
+                throw new GraphQLException("Not authorized");
+
+            return garden;
         }
+
     }
 }

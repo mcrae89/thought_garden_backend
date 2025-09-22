@@ -24,29 +24,42 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) CreateAndAuthenticateTempUser(string username, string email, string role = "User")
+        private (int Id, string UserName, string Email) EnsureUser(string userName, string email, UserRole role = UserRole.User)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
-
-            var planId = db.SubscriptionPlans.First().Id;
-            var user = new User
+            var u = db.Users.FirstOrDefault(x => x.UserName == userName);
+            if (u == null)
             {
-                UserName = username,
-                Email = email,
-                PasswordHash = PasswordHelper.HashPassword("P@ssw0rd!"),
-                Role = role == "Admin" ? UserRole.Admin : UserRole.User,
-                SubscriptionPlanId = planId
-            };
-            db.Users.Add(user);
-            db.SaveChanges();
+                var planId = db.SubscriptionPlans.First().Id;
+                u = new User
+                {
+                    UserName = userName,
+                    Email = email,
+                    PasswordHash = PasswordHelper.HashPassword("P@ssw0rd!"),
+                    Role = role,
+                    SubscriptionPlanId = planId
+                };
+                db.Users.Add(u);
+                db.SaveChanges();
+            }
 
+            return (u.Id, u.UserName, u.Email);
+        }
+
+        private void Authenticate((int Id, string UserName, string Email) user, string role)
+        {
             var token = JwtTokenGenerator.GenerateToken(
                 _factory.JwtKey, "TestIssuer", "TestAudience",
                 user.Id, user.UserName, user.Email, role);
-
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            return (user.Id, user.UserName, user.Email);
+        }
+
+        private int GetAnyEmotionTagId()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+            return db.EmotionTags.Select(e => e.Id).First();
         }
 
         // ---------------------------
@@ -56,7 +69,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetEmotions_Returns_SeededTags()
         {
-            CreateAndAuthenticateTempUser("query_emotions", "query_emotions@test.com");
+            var user = EnsureUser("query_emotions", "query_emotions@test.com");
+            Authenticate(user, "User");
 
             var query = new { query = "{ emotions { id name color } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
@@ -70,9 +84,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetEmotionById_Returns_One()
         {
-            CreateAndAuthenticateTempUser("query_emotion_byid", "query_emotion_byid@test.com");
+            var user = EnsureUser("query_emotion_byid", "query_emotion_byid@test.com");
+            Authenticate(user, "User");
+            var etid = GetAnyEmotionTagId();
 
-            var query = new { query = "{ emotionById(id:1) { id name } }" };
+            var query = new { query = $"{{ emotionById(id:{etid}) {{ id name }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
 
@@ -84,7 +100,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetEmotionById_Returns_Empty_For_InvalidId()
         {
-            CreateAndAuthenticateTempUser("query_invalid", "query_invalid@test.com");
+            var user = EnsureUser("query_invalid", "query_invalid@test.com");
+            Authenticate(user, "User");
 
             var query = new { query = "{ emotionById(id:9999) { id name } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
@@ -98,17 +115,13 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // Mutation Tests
         // ---------------------------
 
-        // ---- Add ----
         [Fact]
         public async Task AddEmotionTag_Allows_Admin()
         {
-            CreateAndAuthenticateTempUser("admin_addtag", "admin_addtag@test.com", role: "Admin");
+            var admin = EnsureUser("admin_addtag", "admin_addtag@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
-            var mutation = new
-            {
-                query = "mutation { addEmotionTag(name:\"Joy\", color:\"#ff0\", icon:\"smile\") { id name color icon } }"
-            };
-
+            var mutation = new { query = "mutation { addEmotionTag(name:\"Joy\", color:\"#ff0\", icon:\"smile\") { id name color icon } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
             resp.EnsureSuccessStatusCode();
 
@@ -119,7 +132,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task AddEmotionTag_Fails_For_User()
         {
-            CreateAndAuthenticateTempUser("user_addtag", "user_addtag@test.com", role: "User");
+            var user = EnsureUser("user_addtag", "user_addtag@test.com", UserRole.User);
+            Authenticate(user, "User");
 
             var mutation = new { query = "mutation { addEmotionTag(name:\"Blocked\", color:\"#000\", icon:\"ban\") { id name } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
@@ -139,17 +153,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---- Update ----
         [Fact]
         public async Task UpdateEmotionTag_Allows_Admin()
         {
-            CreateAndAuthenticateTempUser("admin_updatetag", "admin_updatetag@test.com", role: "Admin");
+            var admin = EnsureUser("admin_updatetag", "admin_updatetag@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
+            var etid = GetAnyEmotionTagId();
 
-            var mutation = new
-            {
-                query = "mutation { updateEmotionTag(id:1, name:\"Updated\", color:\"#abc\", icon:\"edit\") { id name color icon } }"
-            };
-
+            var mutation = new { query = $"mutation {{ updateEmotionTag(id:{etid}, name:\"Updated\", color:\"#abc\", icon:\"edit\") {{ id name color icon }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
             resp.EnsureSuccessStatusCode();
 
@@ -160,7 +171,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateEmotionTag_Returns_Null_When_NotFound()
         {
-            CreateAndAuthenticateTempUser("admin_updatenull", "admin_updatenull@test.com", role: "Admin");
+            var admin = EnsureUser("admin_updatenull", "admin_updatenull@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
             var mutation = new { query = "mutation { updateEmotionTag(id:9999, name:\"Ghost\") { id name } }" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
@@ -173,9 +185,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task UpdateEmotionTag_Fails_For_User()
         {
-            CreateAndAuthenticateTempUser("user_updatetag", "user_updatetag@test.com", role: "User");
+            var user = EnsureUser("user_updatetag", "user_updatetag@test.com", UserRole.User);
+            Authenticate(user, "User");
+            var etid = GetAnyEmotionTagId();
 
-            var mutation = new { query = "mutation { updateEmotionTag(id:1, name:\"Hacker\") { id name } }" };
+            var mutation = new { query = $"mutation {{ updateEmotionTag(id:{etid}, name:\"Hacker\") {{ id name }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
             resp.EnsureSuccessStatusCode();
 
@@ -193,11 +207,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---- Delete ----
         [Fact]
         public async Task DeleteEmotionTag_Allows_Admin()
         {
-            CreateAndAuthenticateTempUser("admin_deletetag", "admin_deletetag@test.com", role: "Admin");
+            var admin = EnsureUser("admin_deletetag", "admin_deletetag@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
             var add = new { query = "mutation { addEmotionTag(name:\"TempDel\", color:\"#ccc\", icon:\"trash\") { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
@@ -216,7 +230,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteEmotionTag_Returns_False_When_NotFound()
         {
-            CreateAndAuthenticateTempUser("admin_deletefail", "admin_deletefail@test.com", role: "Admin");
+            var admin = EnsureUser("admin_deletefail", "admin_deletefail@test.com", UserRole.Admin);
+            Authenticate(admin, "Admin");
 
             var mutation = new { query = "mutation { deleteEmotionTag(id:9999) }" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
@@ -229,9 +244,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task DeleteEmotionTag_Fails_For_User()
         {
-            CreateAndAuthenticateTempUser("user_deletefail", "user_deletefail@test.com", role: "User");
+            var user = EnsureUser("user_deletefail", "user_deletefail@test.com", UserRole.User);
+            Authenticate(user, "User");
+            var etid = GetAnyEmotionTagId();
 
-            var mutation = new { query = "mutation { deleteEmotionTag(id:1) }" };
+            var mutation = new { query = $"mutation {{ deleteEmotionTag(id:{etid}) }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", mutation);
             resp.EnsureSuccessStatusCode();
 

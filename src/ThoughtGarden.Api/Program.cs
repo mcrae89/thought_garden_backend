@@ -18,6 +18,8 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
 );
 
 builder.Services.AddScoped<JwtHelper>();
+builder.Services.AddSingleton<EncryptionHelper>();
+
 
 // GraphQL (Hot Chocolate)
 builder.Services

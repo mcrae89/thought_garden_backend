@@ -117,6 +117,7 @@ namespace ThoughtGarden.Api.Migrations
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     text = table.Column<string>(type: "text", nullable: false),
+                    iv = table.Column<string>(type: "text", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -130,7 +131,8 @@ namespace ThoughtGarden.Api.Migrations
                         name: "fk_journal_entries_emotion_tags_mood_id",
                         column: x => x.mood_id,
                         principalTable: "emotion_tags",
-                        principalColumn: "id");
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_journal_entries_users_user_id",
                         column: x => x.user_id,
@@ -292,13 +294,13 @@ namespace ThoughtGarden.Api.Migrations
 
             migrationBuilder.InsertData(
                 table: "journal_entries",
-                columns: new[] { "id", "created_at", "is_deleted", "mood_id", "text", "updated_at", "user_id" },
+                columns: new[] { "id", "created_at", "iv", "is_deleted", "mood_id", "text", "updated_at", "user_id" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 1, "Feeling happy and accomplished today.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 3, "Got frustrated with a bug, but resolved it.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 2, "Sad about the weather, it's been gloomy.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 },
-                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), false, 4, "Went for a walk and felt calm afterward.", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
+                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "cBHSM6AUxhuJsCIyMAvklg==", false, 1, "j2mTHKGDmOn4hlryKv3eyL6P4ShFRRYdOQLuh1RDZeElQcHsZqKDdVzEWai9iAN/", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
+                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qwA2K9DHJfAGik2wzQrEug==", false, 3, "taR9XokdNP9nxTZwNRwJbZHmLwZdWhmf4UOa5QPfVGIUx7whOYwf06Sd6G+D0Ebl", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
+                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "z37o+Qx3yP7xJLBmeELwjw==", false, 2, "msYvFrmn0F4ZBLqmhmlRNAmIREbkViB8Pan6nrjkLl17bDzUWLDO7hp1zYLjI49o", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 },
+                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "5dBrHWrNm2LMqfFfTIN6ww==", false, 4, "PR4aADhdP/4lmVSQbFkdQSpLmYFqOE1ue9MbvxfZ8DDeah/cIlYWmcmIuWBpsb6o", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
                 });
 
             migrationBuilder.InsertData(

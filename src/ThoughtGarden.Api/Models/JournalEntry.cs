@@ -1,12 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace ThoughtGarden.Models
+﻿namespace ThoughtGarden.Models
 {
     public class JournalEntry
     {
         public int Id { get; set; }  // Primary Key
         public string Text { get; set; } = null!;
+
+        // IV used for encryption/decryption (Base64-encoded 16-byte string)
+        public string IV { get; set; } = null!;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; } = false;
@@ -23,3 +24,4 @@ namespace ThoughtGarden.Models
         public ICollection<EntryEmotion> SecondaryEmotions { get; set; } = new List<EntryEmotion>();
     }
 }
+
