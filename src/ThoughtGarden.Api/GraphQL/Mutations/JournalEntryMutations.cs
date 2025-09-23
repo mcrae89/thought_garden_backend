@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ThoughtGarden.Api.Data;
+using ThoughtGarden.Api.GraphQL.Mappers;
 using ThoughtGarden.Api.GraphQL.Types;
 using ThoughtGarden.Models;
 using ThoughtGarden.Models.Inputs;
@@ -39,22 +40,10 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
                 }
                 await db.SaveChangesAsync();
             }
-
-            // ✅ hydrate Mood and SecondaryEmotions.Emotion for return
             await db.Entry(entry).Reference(e => e.Mood).LoadAsync();
             await db.Entry(entry).Collection(e => e.SecondaryEmotions).Query().Include(se => se.Emotion).LoadAsync();
 
-            return new JournalEntryType
-            {
-                Id = entry.Id,
-                Text = encryption.Decrypt(entry.Text, entry.IV),
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt,
-                IsDeleted = entry.IsDeleted,
-                MoodId = entry.MoodId,
-                Mood = entry.Mood,
-                SecondaryEmotions = entry.SecondaryEmotions
-            };
+            return entry.ToGraphType(encryption);
         }
 
         [Authorize]
@@ -92,21 +81,10 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             entry.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            // ✅ hydrate Mood and SecondaryEmotions.Emotion for return
             await db.Entry(entry).Reference(e => e.Mood).LoadAsync();
             await db.Entry(entry).Collection(e => e.SecondaryEmotions).Query().Include(se => se.Emotion).LoadAsync();
 
-            return new JournalEntryType
-            {
-                Id = entry.Id,
-                Text = encryption.Decrypt(entry.Text, entry.IV),
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt,
-                IsDeleted = entry.IsDeleted,
-                MoodId = entry.MoodId,
-                Mood = entry.Mood,
-                SecondaryEmotions = entry.SecondaryEmotions
-            };
+            return entry.ToGraphType(encryption);
         }
 
         [Authorize]
