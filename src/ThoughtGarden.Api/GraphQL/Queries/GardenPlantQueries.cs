@@ -25,7 +25,14 @@ namespace ThoughtGarden.Api.GraphQL.Queries
             var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = claims.FindFirstValue(ClaimTypes.Role);
             var isAdmin = role == UserRole.Admin.ToString();
-            return db.GardenPlants.Where(p => p.GardenStateId == gardenStateId && !p.IsStored && (isAdmin || p.GardenState.UserId == callerId)).OrderBy(p => p.Order);
+
+            var ownerAllowed = isAdmin || db.GardenStates.Any(gs => gs.Id == gardenStateId && gs.UserId == callerId);
+            if (!ownerAllowed)
+                throw new GraphQLException("Not authorized");
+
+            return db.GardenPlants
+                .Where(p => p.GardenStateId == gardenStateId && !p.IsStored)
+                .OrderBy(p => p.Order);
         }
     }
 }
