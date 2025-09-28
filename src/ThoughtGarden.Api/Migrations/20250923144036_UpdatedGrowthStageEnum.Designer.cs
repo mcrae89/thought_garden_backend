@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ThoughtGarden.Api.Data;
@@ -11,9 +12,11 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    partial class ThoughtGardenDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250923144036_UpdatedGrowthStageEnum")]
+    partial class UpdatedGrowthStageEnum
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

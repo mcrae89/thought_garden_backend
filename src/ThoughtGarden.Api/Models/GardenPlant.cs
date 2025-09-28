@@ -28,9 +28,9 @@ namespace ThoughtGarden.Models
         {
             Seed = 0,
             Sprout = 1,
-            Bloom = 2,
-            Mature = 3,
-            Withered = 4
+            Budding = 2,
+            Bloom = 3,
+            Mature = 4
         }
     }
 }

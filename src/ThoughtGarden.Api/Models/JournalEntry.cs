@@ -16,7 +16,7 @@
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
-        // ✅ Primary mood
+        // Primary mood
         public int? MoodId { get; set; }
         public EmotionTag? Mood { get; set; }
 

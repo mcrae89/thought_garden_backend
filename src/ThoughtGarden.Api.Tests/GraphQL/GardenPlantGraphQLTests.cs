@@ -20,9 +20,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             _client = _factory.CreateClient();
         }
 
-        // ---------------------------
-        // Helpers
-        // ---------------------------
+        #region Helpers
         private (int Id, string UserName, string Email) EnsureUser(string userName, string email, UserRole role = UserRole.User)
         {
             using var scope = _factory.Services.CreateScope();
@@ -103,10 +101,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             db.SaveChanges();
             return gp;
         }
+        #endregion
 
-        // ---------------------------
-        // Query Tests
-        // ---------------------------
+        #region Queries
 
         [Fact]
         public async Task GetStoredPlants_Allows_Self()
@@ -209,9 +206,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("[]", json);
         }
 
-        // ---------------------------
-        // Mutation Tests
-        // ---------------------------
+        #endregion
+
+        #region Mutations
+
+        #region Create
 
         [Fact]
         public async Task AddGardenPlant_Allows_Self()
@@ -262,6 +261,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
+        #endregion
+
+        #region Growth
 
         [Fact]
         public async Task GrowGardenPlant_Allows_Self()
@@ -309,6 +311,49 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
+        public async Task GrowGardenPlant_Resets_And_Advances_Stage_When_Reaching_100()
+        {
+            var user = EnsureUser("gp_grow_stage", "gp_grow_stage@test.com");
+            Authenticate(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            // Pre-set growth close to 100
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                gp.GrowthProgress = 95.0;
+                gp.Stage = GardenPlant.GrowthStage.Seed;
+                db.GardenPlants.Update(gp);
+                db.SaveChanges();
+            }
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            // Expect rollover
+            Assert.Contains("\"growthProgress\":0", json);
+            Assert.Contains("Sprout", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task GrowGardenPlant_Applies_GrowthMultiplier()
+        {
+            var user = EnsureUser("gp_grow_mult", "gp_grow_mult@test.com");
+            Authenticate(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}, growthMultiplier:2) {{ id growthProgress }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            // 5% * 2 = 10
+            Assert.Contains("10", json); // JSON serializes doubles as decimals
+        }
+
+        [Fact]
         public async Task GrowGardenPlant_Denies_Other_User()
         {
             var u1 = EnsureUser("gp_grow_u1", "gp_grow_u1@test.com");
@@ -322,6 +367,137 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
+
+        [Fact]
+        public async Task GrowGardenPlant_Denies_Anonymous()
+        {
+            var user = EnsureUser("gp_grow_anon", "gp_grow_anon@test.com");
+            var gp = CreateGardenPlant(user.Id);
+
+            // Do NOT call Authenticate()
+
+            var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        #endregion
+
+        #region Mature
+
+        [Fact]
+        public async Task MatureGardenPlant_Allows_Self_When_Blooming()
+        {
+            var user = EnsureUser("gp_mature_self", "gp_mature_self@test.com");
+            Authenticate(user, "User");
+            var gp = CreateGardenPlant(user.Id);
+
+            // Pre-set to Bloom
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                gp.Stage = GardenPlant.GrowthStage.Bloom;
+                db.GardenPlants.Update(gp);
+                db.SaveChanges();
+            }
+
+            var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Mature", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task MatureGardenPlant_Fails_When_Not_Bloom()
+        {
+            var user = EnsureUser("gp_mature_fail", "gp_mature_fail@test.com");
+            Authenticate(user, "User");
+            var gp = CreateGardenPlant(user.Id); // Starts at Seed
+
+            var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Only blooming plants can mature", json);
+        }
+
+        [Fact]
+        public async Task MatureGardenPlant_Allows_Admin()
+        {
+            var admin = EnsureUser("gp_mature_admin", "gp_mature_admin@test.com", UserRole.Admin);
+            var user = EnsureUser("gp_mature_target", "gp_mature_target@test.com");
+            Authenticate(admin, "Admin");
+            var gp = CreateGardenPlant(user.Id);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                gp.Stage = GardenPlant.GrowthStage.Bloom;
+                db.GardenPlants.Update(gp);
+                db.SaveChanges();
+            }
+
+            var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Mature", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task MatureGardenPlant_Denies_Other_User()
+        {
+            var u1 = EnsureUser("gp_mature_u1", "gp_mature_u1@test.com");
+            var u2 = EnsureUser("gp_mature_u2", "gp_mature_u2@test.com");
+            Authenticate(u1, "User");
+            var gp = CreateGardenPlant(u2.Id);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                gp.Stage = GardenPlant.GrowthStage.Bloom;
+                db.GardenPlants.Update(gp);
+                db.SaveChanges();
+            }
+
+            var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task MatureGardenPlant_Denies_Anonymous()
+        {
+            var user = EnsureUser("gp_mature_anon", "gp_mature_anon@test.com");
+            var gp = CreateGardenPlant(user.Id);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
+                gp.Stage = GardenPlant.GrowthStage.Bloom;
+                db.GardenPlants.Update(gp);
+                db.SaveChanges();
+            }
+
+            // Do NOT call Authenticate()
+
+            var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        #endregion
+
+        #region Move
 
         [Fact]
         public async Task MoveGardenPlant_Allows_Self()
@@ -383,6 +559,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
+        #endregion
+
+        #region Store
+
         [Fact]
         public async Task StoreGardenPlant_Allows_Self()
         {
@@ -443,9 +623,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---------------------------
-        // Restore
-        // ---------------------------
         [Fact]
         public async Task RestoreGardenPlant_Allows_Self()
         {
@@ -508,9 +685,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---------------------------
-        // Delete
-        // ---------------------------
+        #endregion
+
+        #region Delete
+        
         [Fact]
         public async Task DeleteGardenPlant_Allows_Self()
         {
@@ -568,7 +746,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
+
+        #endregion
+
+        #endregion
     }
 }

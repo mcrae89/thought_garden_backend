@@ -1,8 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using HotChocolate.Authorization;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
-using System.Security.Claims;
-using HotChocolate.Authorization;
+using static ThoughtGarden.Models.GardenPlant;
 
 namespace ThoughtGarden.Api.GraphQL.Mutations
 {
@@ -33,10 +34,52 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             if (plant == null) return null;
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
-            plant.GrowthProgress = plant.GrowthProgress + (.05 * growthMultiplier);
+            plant.GrowthProgress = plant.GrowthProgress + (5 * growthMultiplier);
+
+            if (plant.GrowthProgress >= 100)
+            {
+                plant.GrowthProgress = 0;
+
+                if (plant.Stage < GrowthStage.Bloom)
+                {
+                    plant.Stage++;
+                }
+            }
+
             await db.SaveChangesAsync();
             return plant;
         }
+
+        [Authorize]
+        public async Task<GardenPlant?> MatureGardenPlant(
+    int plantId,
+    ClaimsPrincipal claims,
+    [Service] ThoughtGardenDbContext db)
+        {
+            var userId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var plant = await db.GardenPlants
+                .Include(p => p.GardenState)
+                .FirstOrDefaultAsync(p => p.Id == plantId);
+
+            if (plant == null)
+                throw new GraphQLException("Plant not found");
+
+            if (plant.GardenState.UserId != userId && !claims.IsInRole("Admin"))
+                throw new GraphQLException("Not authorized");
+
+            if (plant.Stage != GardenPlant.GrowthStage.Bloom)
+                throw new GraphQLException("Only blooming plants can mature");
+
+            plant.Stage = GardenPlant.GrowthStage.Mature;
+            plant.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return plant;
+        }
+
+
 
         [Authorize]
         public async Task<GardenPlant?> MoveGardenPlant(int plantId, int newOrder, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db)
