@@ -101,21 +101,23 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
         // Full hygiene after compromise: re-encrypt data with new DEKs (uses current active keys)
         [Authorize]
         public async Task<bool> ReencryptAfterCompromise(
-            string compromisedKeyId,
-            [Service] ThoughtGardenDbContext db,
-            [Service] EnvelopeCrypto env,
-            [Service] IHostEnvironment envHost,
-            CancellationToken ct)
+    string compromisedKeyId,
+    [Service] ThoughtGardenDbContext db,
+    [Service] EnvelopeCrypto env,
+    [Service] IHostEnvironment envHost,
+    CancellationToken ct)
         {
             if (!envHost.IsDevelopment()) throw new GraphQLException("not authorized");
 
             const int batchSize = 250;
+            var lastId = 0;
 
             while (true)
             {
                 var batch = await db.JournalEntries
-                    .Where(e => e.WrappedKeys != null &&
-                                EF.Functions.ILike(e.WrappedKeys!, $"%\"{compromisedKeyId}\"%"))
+                    .Where(e => e.WrappedKeys != null
+                                && e.Id > lastId
+                                && EF.Functions.ILike(e.WrappedKeys!, $"%\"{compromisedKeyId}\"%"))
                     .OrderBy(e => e.Id)
                     .Take(batchSize)
                     .ToListAsync(ct);
@@ -124,13 +126,16 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
 
                 foreach (var e in batch)
                 {
+                    // move cursor
+                    if (e.Id > lastId) lastId = e.Id;
+
                     var plaintext = env.Decrypt(e.Text, e.DataNonce!, e.DataTag!, e.WrappedKeys!);
 
                     var enc = env.Encrypt(plaintext);
                     e.Text = enc.cipher;
                     e.DataNonce = enc.nonce;
                     e.DataTag = enc.tag;
-                    e.WrappedKeys = enc.wrappedKeysJson;
+                    e.WrappedKeys = enc.wrappedKeysJson; // only active primary + recovery now
                     e.AlgVersion = enc.algVersion;
                     e.UpdatedAt = DateTime.UtcNow;
                 }
