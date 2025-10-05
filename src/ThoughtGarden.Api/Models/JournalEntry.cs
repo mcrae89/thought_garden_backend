@@ -5,8 +5,6 @@
         public int Id { get; set; }  // Primary Key
         public string Text { get; set; } = null!;
 
-        // GCM nonce (Base64-encoded 12-byte string). Kept in both IV and DataNonce.
-        public string IV { get; set; } = null!;
         public string? DataNonce { get; set; }     // base64(12)
         public string? DataTag { get; set; }       // base64(16)
         public string? WrappedKeys { get; set; }   // JSON map: keyId -> base64(nonce||tag||wrappedDEK)

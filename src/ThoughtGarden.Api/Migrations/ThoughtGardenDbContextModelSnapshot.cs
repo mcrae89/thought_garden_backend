@@ -329,11 +329,6 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("data_tag");
 
-                    b.Property<string>("IV")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("iv");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");

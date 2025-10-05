@@ -24,7 +24,6 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
 
                 // encryption fields (preserve your property names)
                 Text = enc.cipher,
-                IV = enc.nonce,           // mirror nonce for compatibility
                 DataNonce = enc.nonce,
                 DataTag = enc.tag,
                 WrappedKeys = enc.wrappedKeysJson,
@@ -70,7 +69,6 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             {
                 var enc = crypto.Encrypt(text);
                 entry.Text = enc.cipher;        // base64 ciphertext
-                entry.IV = enc.nonce;         // keep mirroring for compatibility
                 entry.DataNonce = enc.nonce;         // base64(12)
                 entry.DataTag = enc.tag;           // base64(16)
                 entry.WrappedKeys = enc.wrappedKeysJson;

@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ThoughtGarden.Api.Migrations
 {
     /// <inheritdoc />
-    public partial class initialCreate : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -117,7 +117,6 @@ namespace ThoughtGarden.Api.Migrations
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     text = table.Column<string>(type: "text", nullable: false),
-                    iv = table.Column<string>(type: "text", nullable: false),
                     data_nonce = table.Column<string>(type: "text", nullable: true),
                     data_tag = table.Column<string>(type: "text", nullable: true),
                     wrapped_keys = table.Column<string>(type: "text", nullable: true),

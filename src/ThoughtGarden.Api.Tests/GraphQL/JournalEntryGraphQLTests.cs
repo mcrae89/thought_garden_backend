@@ -85,6 +85,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntries_Admin_Sees_AllEntries()
         {
+            // Admin can list all entries but text must be "[encrypted]" (no plaintext).
             CreateAndAuthenticateUser("user_entries", "user_entries@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"UserEntry\", moodId:1, secondaryEmotions:[]) { id } }" };
             await _client.PostAsJsonAsync("/graphql", add);
@@ -95,7 +96,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("UserEntry", json);
+            Assert.DoesNotContain("UserEntry", json); // no plaintext
+            Assert.Contains("\"text\":\"[encrypted]\"", json);
+            Assert.DoesNotContain("not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -128,15 +131,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Private", json);
         }
-
-
 
         [Fact]
         public async Task GetJournalEntryById_Admin_CanAccess()
         {
+            // Admin can fetch by id but must receive "[encrypted]" for text.
             CreateAndAuthenticateUser("entry_user", "entry_user@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"AdminCanSee\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
@@ -149,7 +151,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("AdminCanSee", json);
+            Assert.DoesNotContain("AdminCanSee", json); // no plaintext
+            Assert.Contains("\"text\":\"[encrypted]\"", json);
+            Assert.DoesNotContain("not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         // ---------------------------
@@ -245,10 +249,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", update);
             var json = await resp.Content.ReadAsStringAsync();
 
-            // 🔧 Fix: match resolver behavior ("Entry not found")
+            // 🔧 Resolver returns: "Entry not found"
             Assert.Contains("Entry not found", json, StringComparison.OrdinalIgnoreCase);
         }
-
 
         [Fact]
         public async Task UpdateJournalEntry_Denies_Anonymous()
@@ -306,7 +309,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("Entry not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
-
         [Fact]
         public async Task DeleteJournalEntry_Denies_Anonymous()
         {
@@ -337,7 +339,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var entryId = JsonDocument.Parse(addJson)
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
-            // DB contains ciphertext
+            // DB contains ciphertext & envelope fields
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -345,7 +347,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
                 Assert.NotEqual("SensitiveNote", dbEntry.Text);
                 Assert.DoesNotContain("SensitiveNote", dbEntry.Text);
-                Assert.False(string.IsNullOrWhiteSpace(dbEntry.IV));
+                Assert.False(string.IsNullOrWhiteSpace(dbEntry.DataNonce));
+                Assert.False(string.IsNullOrWhiteSpace(dbEntry.DataTag));
+                Assert.False(string.IsNullOrWhiteSpace(dbEntry.WrappedKeys));
             }
 
             // GraphQL decrypts again
@@ -358,9 +362,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
-        public async Task JournalEntry_WithoutIV_FailsGracefully()
+        public async Task JournalEntry_WithoutEnvelope_FailsGracefully()
         {
-            var user = CreateAndAuthenticateUser("bad_iv_user", "bad_iv_user@test.com");
+            // Trigger DecryptionFailedException by providing an empty WrappedKeys map (no available KEK).
+            var user = CreateAndAuthenticateUser("bad_env_user", "bad_env_user@test.com");
             int badEntryId;
 
             using (var scope = _factory.Services.CreateScope())
@@ -370,7 +375,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 {
                     UserId = user.Id,
                     Text = "CorruptedCiphertext",
-                    IV = "", // missing IV
+                    DataNonce = "AAA=",   // dummy
+                    DataTag = "AAA=",     // dummy
+                    WrappedKeys = "{}",   // <- forces DecryptionFailedException in env.Decrypt
                     MoodId = 1,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,

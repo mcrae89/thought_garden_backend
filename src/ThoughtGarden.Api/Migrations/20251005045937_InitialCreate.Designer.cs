@@ -12,8 +12,8 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20251005043357_initialCreate")]
-    partial class initialCreate
+    [Migration("20251005045937_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -331,11 +331,6 @@ namespace ThoughtGarden.Api.Migrations
                     b.Property<string>("DataTag")
                         .HasColumnType("text")
                         .HasColumnName("data_tag");
-
-                    b.Property<string>("IV")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("iv");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")

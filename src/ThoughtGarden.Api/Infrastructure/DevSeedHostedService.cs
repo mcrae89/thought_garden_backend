@@ -48,7 +48,6 @@ public sealed class DevSeedHostedService : IHostedService
                 UserId = userId,
                 MoodId = moodId,
                 Text = enc.cipher,
-                IV = enc.nonce,           // mirror nonce for compatibility
                 DataNonce = enc.nonce,    // 12B
                 DataTag = enc.tag,        // 16B
                 WrappedKeys = enc.wrappedKeysJson,
