@@ -18,11 +18,11 @@ builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
 );
 
 builder.Services.AddScoped<JwtHelper>();
-builder.Services.AddSingleton<EncryptionHelper>();
+builder.Services.AddSingleton<EnvelopeCrypto>();
 
 
 // GraphQL (Hot Chocolate)
-builder.Services
+var gql = builder.Services
     .AddGraphQLServer()
     .AddAuthorization()
     .AddProjections()
@@ -43,6 +43,11 @@ builder.Services
         .AddTypeExtension<GardenStateMutations>()
         .AddTypeExtension<GardenPlantMutations>()
         .AddTypeExtension<PlantTypeMutations>();
+
+if (builder.Environment.IsDevelopment())
+{
+    gql.AddTypeExtension<MaintenanceMutations>(); // dev-only
+}
 
 // Swagger for REST endpoints
 builder.Services.AddEndpointsApiExplorer();
@@ -80,6 +85,8 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHostedService<ThoughtGarden.Api.Infrastructure.DevSeedHostedService>();
+
 
 var app = builder.Build();
 

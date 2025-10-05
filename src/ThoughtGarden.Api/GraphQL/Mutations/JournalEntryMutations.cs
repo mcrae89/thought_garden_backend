@@ -2,7 +2,6 @@
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ThoughtGarden.Api.Data;
-using ThoughtGarden.Api.GraphQL.Mappers;
 using ThoughtGarden.Api.GraphQL.Types;
 using ThoughtGarden.Models;
 using ThoughtGarden.Models.Inputs;
@@ -13,17 +12,24 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     public class JournalEntryMutations
     {
         [Authorize]
-        public async Task<JournalEntryType> AddJournalEntry(string text, int moodId, List<SecondaryEmotionInput>? secondaryEmotions, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db, [Service] EncryptionHelper encryption)
+        public async Task<JournalEntryType> AddJournalEntry(string text, int moodId, List<SecondaryEmotionInput>? secondaryEmotions, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db, [Service] EnvelopeCrypto crypto)
         {
             var userId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var (cipherText, iv) = encryption.Encrypt(text);
+            var enc = crypto.Encrypt(text);
 
             var entry = new JournalEntry
             {
                 UserId = userId,
-                Text = cipherText,
-                IV = iv,
                 MoodId = moodId,
+
+                // encryption fields (preserve your property names)
+                Text = enc.cipher,
+                IV = enc.nonce,           // mirror nonce for compatibility
+                DataNonce = enc.nonce,
+                DataTag = enc.tag,
+                WrappedKeys = enc.wrappedKeysJson,
+                AlgVersion = enc.algVersion,
+
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 IsDeleted = false
@@ -43,11 +49,11 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             await db.Entry(entry).Reference(e => e.Mood).LoadAsync();
             await db.Entry(entry).Collection(e => e.SecondaryEmotions).Query().Include(se => se.Emotion).LoadAsync();
 
-            return entry.ToGraphType(encryption);
+            return entry.ToGraphType(crypto);
         }
 
         [Authorize]
-        public async Task<JournalEntryType> UpdateJournalEntry(int id, string? text, int? moodId, List<SecondaryEmotionInput>? secondaryEmotions, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db, [Service] EncryptionHelper encryption)
+        public async Task<JournalEntryType> UpdateJournalEntry(int id, string? text, int? moodId, List<SecondaryEmotionInput>? secondaryEmotions, ClaimsPrincipal claims, [Service] ThoughtGardenDbContext db, [Service] EnvelopeCrypto crypto)
         {
             var userId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = claims.FindFirstValue(ClaimTypes.Role);
@@ -62,9 +68,13 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
 
             if (!string.IsNullOrWhiteSpace(text))
             {
-                var (cipherText, iv) = encryption.Encrypt(text);
-                entry.Text = cipherText;
-                entry.IV = iv;
+                var enc = crypto.Encrypt(text);
+                entry.Text = enc.cipher;        // base64 ciphertext
+                entry.IV = enc.nonce;         // keep mirroring for compatibility
+                entry.DataNonce = enc.nonce;         // base64(12)
+                entry.DataTag = enc.tag;           // base64(16)
+                entry.WrappedKeys = enc.wrappedKeysJson;
+                entry.AlgVersion = enc.algVersion;    // "gcm.v1"
             }
 
             if (moodId.HasValue) entry.MoodId = moodId.Value;
@@ -84,7 +94,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             await db.Entry(entry).Reference(e => e.Mood).LoadAsync();
             await db.Entry(entry).Collection(e => e.SecondaryEmotions).Query().Include(se => se.Emotion).LoadAsync();
 
-            return entry.ToGraphType(encryption);
+            return entry.ToGraphType(crypto);
         }
 
         [Authorize]

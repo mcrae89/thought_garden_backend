@@ -5,8 +5,13 @@
         public int Id { get; set; }  // Primary Key
         public string Text { get; set; } = null!;
 
-        // IV used for encryption/decryption (Base64-encoded 16-byte string)
+        // GCM nonce (Base64-encoded 12-byte string). Kept in both IV and DataNonce.
         public string IV { get; set; } = null!;
+        public string? DataNonce { get; set; }     // base64(12)
+        public string? DataTag { get; set; }       // base64(16)
+        public string? WrappedKeys { get; set; }   // JSON map: keyId -> base64(nonce||tag||wrappedDEK)
+        public string? AlgVersion { get; set; }    // e.g., "gcm.v1"
+
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -20,7 +25,7 @@
         public int? MoodId { get; set; }
         public EmotionTag? Mood { get; set; }
 
-        // ✅ Secondary emotions (with intensities)
+        // Secondary emotions (with intensities)
         public ICollection<EntryEmotion> SecondaryEmotions { get; set; } = new List<EntryEmotion>();
     }
 }

@@ -18,7 +18,6 @@ namespace ThoughtGarden.Api.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
 
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -46,7 +45,7 @@ namespace ThoughtGarden.Api.Data
             // ---- PlantType → EmotionTag ----
             modelBuilder.Entity<PlantType>()
                 .HasOne(pt => pt.EmotionTag)
-                .WithMany(et => et.PlantTypes)       // add ICollection<PlantType> to EmotionTag
+                .WithMany(et => et.PlantTypes)
                 .HasForeignKey(pt => pt.EmotionTagId)
                 .IsRequired();
 
@@ -88,7 +87,7 @@ namespace ThoughtGarden.Api.Data
             // ---- RefreshToken → User ----
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(rt => rt.User)
-                .WithMany(u => u.RefreshTokens)     // add ICollection<RefreshToken> to User
+                .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(rt => rt.UserId)
                 .IsRequired();
 
@@ -99,49 +98,19 @@ namespace ThoughtGarden.Api.Data
                 .HasForeignKey(u => u.SubscriptionPlanId)
                 .IsRequired();
 
-            // ---- Seed Data ----
+            // ---- Seed Data (static, non-crypto) ----
             var seedDate = new DateTime(2025, 01, 01, 0, 0, 0, DateTimeKind.Utc);
 
             // 1. Subscription Plans
             modelBuilder.Entity<SubscriptionPlan>().HasData(
-                new SubscriptionPlan
-                {
-                    Id = 1,
-                    Name = "Free",
-                    MaxJournalEntriesPerDay = 3,
-                    MaxGardenCustomizationsPerDay = 2,
-                    Price = 0.00m
-                },
-                new SubscriptionPlan
-                {
-                    Id = 2,
-                    Name = "Pro",
-                    MaxJournalEntriesPerDay = int.MaxValue,
-                    MaxGardenCustomizationsPerDay = int.MaxValue,
-                    Price = 9.99m
-                }
+                new SubscriptionPlan { Id = 1, Name = "Free", MaxJournalEntriesPerDay = 3, MaxGardenCustomizationsPerDay = 2, Price = 0.00m },
+                new SubscriptionPlan { Id = 2, Name = "Pro", MaxJournalEntriesPerDay = int.MaxValue, MaxGardenCustomizationsPerDay = int.MaxValue, Price = 9.99m }
             );
 
             // 2. Users
             modelBuilder.Entity<User>().HasData(
-                new User
-                {
-                    Id = 1,
-                    UserName = "admin",
-                    Email = "admin@example.com",
-                    PasswordHash = "$2a$11$bMbVvslv1w8ctmZB9XJJl.EZHIHgshLMc8zGmryaeKOH2nx/iDFZy",
-                    Role = UserRole.Admin,
-                    SubscriptionPlanId = 2  // give admin Pro
-                },
-                new User
-                {
-                    Id = 2,
-                    UserName = "regular",
-                    Email = "user@example.com",
-                    PasswordHash = "$2a$11$FVx.eRjAlmsDfYXTGklNEuXbP3o4Gb45QVkTop/yK0xo5PkUNHLH6",
-                    Role = UserRole.User,
-                    SubscriptionPlanId = 1  // free tier
-                }
+                new User { Id = 1, UserName = "admin", Email = "admin@example.com", PasswordHash = "$2a$11$bMbVvslv1w8ctmZB9XJJl.EZHIHgshLMc8zGmryaeKOH2nx/iDFZy", Role = UserRole.Admin, SubscriptionPlanId = 2 },
+                new User { Id = 2, UserName = "regular", Email = "user@example.com", PasswordHash = "$2a$11$FVx.eRjAlmsDfYXTGklNEuXbP3o4Gb45QVkTop/yK0xo5PkUNHLH6", Role = UserRole.User, SubscriptionPlanId = 1 }
             );
 
             // 3. EmotionTags
@@ -152,7 +121,7 @@ namespace ThoughtGarden.Api.Data
                 new EmotionTag { Id = 4, Name = "Calm", Color = "#32CD32", Icon = "😌" }
             );
 
-            // 4. Plant Types (depend on EmotionTags)
+            // 4. Plant Types
             modelBuilder.Entity<PlantType>().HasData(
                 new PlantType { Id = 1, Name = "Sunflower", EmotionTagId = 1 },
                 new PlantType { Id = 2, Name = "Willow", EmotionTagId = 2 },
@@ -160,29 +129,20 @@ namespace ThoughtGarden.Api.Data
                 new PlantType { Id = 4, Name = "Lotus", EmotionTagId = 4 }
             );
 
-            // 5. GardenStates (depend on Users)
+            // 5. GardenStates
             modelBuilder.Entity<GardenState>().HasData(
                 new GardenState { Id = 1, UserId = 1, SnapshotAt = seedDate },
                 new GardenState { Id = 2, UserId = 2, SnapshotAt = seedDate }
             );
 
-            // 6. JournalEntries (depend on Users + EmotionTags)
-            modelBuilder.Entity<JournalEntry>().HasData(
-                new JournalEntry { Id = 1, UserId = 1, Text = "j2mTHKGDmOn4hlryKv3eyL6P4ShFRRYdOQLuh1RDZeElQcHsZqKDdVzEWai9iAN/", IV = "cBHSM6AUxhuJsCIyMAvklg==", MoodId = 1, CreatedAt = seedDate, UpdatedAt = seedDate, IsDeleted = false },
-                new JournalEntry { Id = 2, UserId = 1, Text = "taR9XokdNP9nxTZwNRwJbZHmLwZdWhmf4UOa5QPfVGIUx7whOYwf06Sd6G+D0Ebl", IV = "qwA2K9DHJfAGik2wzQrEug==", MoodId = 3, CreatedAt = seedDate, UpdatedAt = seedDate, IsDeleted = false },
-                new JournalEntry { Id = 3, UserId = 2, Text = "msYvFrmn0F4ZBLqmhmlRNAmIREbkViB8Pan6nrjkLl17bDzUWLDO7hp1zYLjI49o", IV = "z37o+Qx3yP7xJLBmeELwjw==", MoodId = 2, CreatedAt = seedDate, UpdatedAt = seedDate, IsDeleted = false },
-                new JournalEntry { Id = 4, UserId = 2, Text = "PR4aADhdP/4lmVSQbFkdQSpLmYFqOE1ue9MbvxfZ8DDeah/cIlYWmcmIuWBpsb6o", IV = "5dBrHWrNm2LMqfFfTIN6ww==", MoodId = 4, CreatedAt = seedDate, UpdatedAt = seedDate, IsDeleted = false }
-            );
+            // 6. JournalEntries — removed from static seeding.
+            //    Rationale: envelope-encrypted rows must be generated with the runtime KEKs.
+            //    Create demo entries via API after startup so they’re encrypted correctly.
 
-            // 7. EntryEmotions (depend on JournalEntries + EmotionTags)
-            modelBuilder.Entity<EntryEmotion>().HasData(
-                new EntryEmotion { EntryId = 1, EmotionId = 4, Intensity = 5 },
-                new EntryEmotion { EntryId = 2, EmotionId = 2, Intensity = 3 },
-                new EntryEmotion { EntryId = 3, EmotionId = 3, Intensity = 2 },
-                new EntryEmotion { EntryId = 4, EmotionId = 1, Intensity = 4 }
-            );
+            // 7. EntryEmotions — removed (they referenced seeded JournalEntries).
+            //    Add emotions to entries via the API after entries are created.
 
-            // 8. Garden Plants (depend on GardenStates + PlantTypes)
+            // 8. Garden Plants
             modelBuilder.Entity<GardenPlant>().HasData(
                 new GardenPlant
                 {
@@ -190,7 +150,7 @@ namespace ThoughtGarden.Api.Data
                     GardenStateId = 1,
                     PlantTypeId = 1,
                     Stage = GardenPlant.GrowthStage.Bloom,
-                    GrowthProgress = 0.8,
+                    GrowthProgress = 8,
                     CreatedAt = seedDate,
                     UpdatedAt = seedDate,
                     Order = null,
@@ -202,7 +162,7 @@ namespace ThoughtGarden.Api.Data
                     GardenStateId = 1,
                     PlantTypeId = 3,
                     Stage = GardenPlant.GrowthStage.Seed,
-                    GrowthProgress = 0.2,
+                    GrowthProgress = 2,
                     CreatedAt = seedDate,
                     UpdatedAt = seedDate,
                     Order = 1,
@@ -214,7 +174,7 @@ namespace ThoughtGarden.Api.Data
                     GardenStateId = 2,
                     PlantTypeId = 2,
                     Stage = GardenPlant.GrowthStage.Sprout,
-                    GrowthProgress = 0.5,
+                    GrowthProgress = 5,
                     CreatedAt = seedDate,
                     UpdatedAt = seedDate,
                     Order = 2,
@@ -226,7 +186,7 @@ namespace ThoughtGarden.Api.Data
                     GardenStateId = 2,
                     PlantTypeId = 4,
                     Stage = GardenPlant.GrowthStage.Mature,
-                    GrowthProgress = 1.0,
+                    GrowthProgress = 1,
                     CreatedAt = seedDate,
                     UpdatedAt = seedDate,
                     Order = null,
@@ -234,6 +194,5 @@ namespace ThoughtGarden.Api.Data
                 }
             );
         }
-
     }
 }

@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ThoughtGarden.Api.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class initialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -118,6 +118,10 @@ namespace ThoughtGarden.Api.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     text = table.Column<string>(type: "text", nullable: false),
                     iv = table.Column<string>(type: "text", nullable: false),
+                    data_nonce = table.Column<string>(type: "text", nullable: true),
+                    data_tag = table.Column<string>(type: "text", nullable: true),
+                    wrapped_keys = table.Column<string>(type: "text", nullable: true),
+                    alg_version = table.Column<string>(type: "text", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -293,36 +297,14 @@ namespace ThoughtGarden.Api.Migrations
                 });
 
             migrationBuilder.InsertData(
-                table: "journal_entries",
-                columns: new[] { "id", "created_at", "iv", "is_deleted", "mood_id", "text", "updated_at", "user_id" },
-                values: new object[,]
-                {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "cBHSM6AUxhuJsCIyMAvklg==", false, 1, "j2mTHKGDmOn4hlryKv3eyL6P4ShFRRYdOQLuh1RDZeElQcHsZqKDdVzEWai9iAN/", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qwA2K9DHJfAGik2wzQrEug==", false, 3, "taR9XokdNP9nxTZwNRwJbZHmLwZdWhmf4UOa5QPfVGIUx7whOYwf06Sd6G+D0Ebl", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1 },
-                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "z37o+Qx3yP7xJLBmeELwjw==", false, 2, "msYvFrmn0F4ZBLqmhmlRNAmIREbkViB8Pan6nrjkLl17bDzUWLDO7hp1zYLjI49o", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 },
-                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "5dBrHWrNm2LMqfFfTIN6ww==", false, 4, "PR4aADhdP/4lmVSQbFkdQSpLmYFqOE1ue9MbvxfZ8DDeah/cIlYWmcmIuWBpsb6o", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2 }
-                });
-
-            migrationBuilder.InsertData(
-                table: "entry_emotions",
-                columns: new[] { "emotion_id", "entry_id", "intensity" },
-                values: new object[,]
-                {
-                    { 4, 1, 5 },
-                    { 2, 2, 3 },
-                    { 3, 3, 2 },
-                    { 1, 4, 4 }
-                });
-
-            migrationBuilder.InsertData(
                 table: "garden_plants",
                 columns: new[] { "id", "created_at", "garden_state_id", "growth_progress", "is_stored", "order", "plant_type_id", "stage", "updated_at" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.80000000000000004, true, null, 1, 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 0.20000000000000001, false, 1, 3, 0, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 0.5, false, 2, 2, 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
-                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 1.0, true, null, 4, 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) }
+                    { 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 8.0, true, null, 1, 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 2, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 1, 2.0, false, 1, 3, 0, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 3, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 5.0, false, 2, 2, 1, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 2, 1.0, true, null, 4, 4, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) }
                 });
 
             migrationBuilder.CreateIndex(

@@ -155,32 +155,6 @@ namespace ThoughtGarden.Api.Migrations
                         .HasDatabaseName("ix_entry_emotions_emotion_id");
 
                     b.ToTable("entry_emotions", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            EntryId = 1,
-                            EmotionId = 4,
-                            Intensity = 5
-                        },
-                        new
-                        {
-                            EntryId = 2,
-                            EmotionId = 2,
-                            Intensity = 3
-                        },
-                        new
-                        {
-                            EntryId = 3,
-                            EmotionId = 3,
-                            Intensity = 2
-                        },
-                        new
-                        {
-                            EntryId = 4,
-                            EmotionId = 1,
-                            Intensity = 4
-                        });
                 });
 
             modelBuilder.Entity("ThoughtGarden.Models.GardenPlant", b =>
@@ -241,7 +215,7 @@ namespace ThoughtGarden.Api.Migrations
                             Id = 1,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 1,
-                            GrowthProgress = 0.80000000000000004,
+                            GrowthProgress = 8.0,
                             IsStored = true,
                             PlantTypeId = 1,
                             Stage = 3,
@@ -252,7 +226,7 @@ namespace ThoughtGarden.Api.Migrations
                             Id = 2,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 1,
-                            GrowthProgress = 0.20000000000000001,
+                            GrowthProgress = 2.0,
                             IsStored = false,
                             Order = 1,
                             PlantTypeId = 3,
@@ -264,7 +238,7 @@ namespace ThoughtGarden.Api.Migrations
                             Id = 3,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             GardenStateId = 2,
-                            GrowthProgress = 0.5,
+                            GrowthProgress = 5.0,
                             IsStored = false,
                             Order = 2,
                             PlantTypeId = 2,
@@ -339,9 +313,21 @@ namespace ThoughtGarden.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AlgVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("alg_version");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("DataNonce")
+                        .HasColumnType("text")
+                        .HasColumnName("data_nonce");
+
+                    b.Property<string>("DataTag")
+                        .HasColumnType("text")
+                        .HasColumnName("data_tag");
 
                     b.Property<string>("IV")
                         .IsRequired()
@@ -369,6 +355,10 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("WrappedKeys")
+                        .HasColumnType("text")
+                        .HasColumnName("wrapped_keys");
+
                     b.HasKey("Id")
                         .HasName("pk_journal_entries");
 
@@ -379,52 +369,6 @@ namespace ThoughtGarden.Api.Migrations
                         .HasDatabaseName("ix_journal_entries_user_id");
 
                     b.ToTable("journal_entries", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IV = "cBHSM6AUxhuJsCIyMAvklg==",
-                            IsDeleted = false,
-                            MoodId = 1,
-                            Text = "j2mTHKGDmOn4hlryKv3eyL6P4ShFRRYdOQLuh1RDZeElQcHsZqKDdVzEWai9iAN/",
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UserId = 1
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IV = "qwA2K9DHJfAGik2wzQrEug==",
-                            IsDeleted = false,
-                            MoodId = 3,
-                            Text = "taR9XokdNP9nxTZwNRwJbZHmLwZdWhmf4UOa5QPfVGIUx7whOYwf06Sd6G+D0Ebl",
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UserId = 1
-                        },
-                        new
-                        {
-                            Id = 3,
-                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IV = "z37o+Qx3yP7xJLBmeELwjw==",
-                            IsDeleted = false,
-                            MoodId = 2,
-                            Text = "msYvFrmn0F4ZBLqmhmlRNAmIREbkViB8Pan6nrjkLl17bDzUWLDO7hp1zYLjI49o",
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UserId = 2
-                        },
-                        new
-                        {
-                            Id = 4,
-                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IV = "5dBrHWrNm2LMqfFfTIN6ww==",
-                            IsDeleted = false,
-                            MoodId = 4,
-                            Text = "PR4aADhdP/4lmVSQbFkdQSpLmYFqOE1ue9MbvxfZ8DDeah/cIlYWmcmIuWBpsb6o",
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UserId = 2
-                        });
                 });
 
             modelBuilder.Entity("ThoughtGarden.Models.RefreshToken", b =>

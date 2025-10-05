@@ -19,10 +19,10 @@ namespace ThoughtGarden.Api.Tests.Utils
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),   // ✅ needed for GetProfile
+                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),   // needed for GetProfile
                 new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim("username", username),
-                new Claim(ClaimTypes.Role, role),                          // ✅ role-based auth
+                new Claim(ClaimTypes.Role, role),                          // role-based auth
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

@@ -10,7 +10,7 @@ namespace ThoughtGarden.Models
         public string Email { get; set; } = null!;
         public string PasswordHash { get; set; } = null!;
 
-        // ✅ Role for authorization
+        // Role for authorization
         public UserRole Role { get; set; } = UserRole.User;
 
         public int SubscriptionPlanId { get; set; }
