@@ -49,6 +49,22 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             return (user.Id, user.UserName, user.Email);
         }
 
+        private static string? GetTextForId(string json, int id)
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("data", out var data)) return null;
+            if (!data.TryGetProperty("journalEntries", out var arr)) return null;
+
+            foreach (var it in arr.EnumerateArray())
+            {
+                if (it.TryGetProperty("id", out var idProp) && idProp.GetInt32() == id)
+                {
+                    return it.TryGetProperty("text", out var textProp) ? textProp.GetString() : null;
+                }
+            }
+            return null;
+        }
+
         // ---------------------------
         // Query Tests
         // ---------------------------
@@ -63,7 +79,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
             var json = await resp.Content.ReadAsStringAsync();
             Assert.Contains("journalEntries", json);
-            Assert.DoesNotContain("text", json);
+            // empty list -> no plaintext content
+            Assert.DoesNotContain("text\":\"", json);
         }
 
         [Fact]
@@ -85,7 +102,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntries_Admin_Sees_AllEntries()
         {
-            // Admin can list all entries but text must be "[encrypted]" (no plaintext).
+            // Admin can list all entries but text must be "[encrypted]" for others.
             CreateAndAuthenticateUser("user_entries", "user_entries@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"UserEntry\", moodId:1, secondaryEmotions:[]) { id } }" };
             await _client.PostAsJsonAsync("/graphql", add);
@@ -96,9 +113,59 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.DoesNotContain("UserEntry", json); // no plaintext
+            Assert.DoesNotContain("UserEntry", json); // no plaintext of others
             Assert.Contains("\"text\":\"[encrypted]\"", json);
             Assert.DoesNotContain("not authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task GetJournalEntries_Admin_Sees_Own_Decrypted_In_List()
+        {
+            // Seed OTHER user's entry
+            CreateAndAuthenticateUser("list_other_u", "list_other_u@test.com");
+            var addOther = new { query = "mutation { addJournalEntry(text:\"OtherListText\", moodId:1, secondaryEmotions:[]) { id } }" };
+            var addOtherResp = await _client.PostAsJsonAsync("/graphql", addOther);
+            var otherId = JsonDocument.Parse(await addOtherResp.Content.ReadAsStringAsync())
+                .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
+
+            // Switch to Admin and add Admin-owned entry
+            CreateAndAuthenticateUser("list_admin_u", "list_admin_u@test.com", role: "Admin");
+            var addAdmin = new { query = "mutation { addJournalEntry(text:\"AdminOwnListText\", moodId:1, secondaryEmotions:[]) { id } }" };
+            var addAdminResp = await _client.PostAsJsonAsync("/graphql", addAdmin);
+            var adminOwnId = JsonDocument.Parse(await addAdminResp.Content.ReadAsStringAsync())
+                .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
+
+            // Admin queries list
+            var query = new { query = "{ journalEntries { id text } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            // Admin sees own decrypted
+            Assert.Equal("AdminOwnListText", GetTextForId(json, adminOwnId));
+            // And no plaintext of others
+            Assert.DoesNotContain("OtherListText", json);
+        }
+
+        [Fact]
+        public async Task GetJournalEntries_Admin_Sees_Others_Masked_In_List()
+        {
+            // OTHER user's entry
+            CreateAndAuthenticateUser("mask_other_u", "mask_other_u@test.com");
+            var addOther = new { query = "mutation { addJournalEntry(text:\"OtherMaskedText\", moodId:1, secondaryEmotions:[]) { id } }" };
+            var addOtherResp = await _client.PostAsJsonAsync("/graphql", addOther);
+            var otherId = JsonDocument.Parse(await addOtherResp.Content.ReadAsStringAsync())
+                .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
+
+            // Switch to Admin and list
+            CreateAndAuthenticateUser("mask_admin_u", "mask_admin_u@test.com", role: "Admin");
+            var list = new { query = "{ journalEntries { id text } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", list);
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Equal("[encrypted]", GetTextForId(json, otherId));
+            Assert.DoesNotContain("OtherMaskedText", json);
         }
 
         [Fact]
@@ -110,7 +177,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
-            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }}}}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
@@ -128,9 +195,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
             CreateAndAuthenticateUser("other_user", "other_user@test.com");
-            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }}}}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             var json = await resp.Content.ReadAsStringAsync();
+
             Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Private", json);
         }
@@ -138,7 +206,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task GetJournalEntryById_Admin_CanAccess()
         {
-            // Admin can fetch by id but must receive "[encrypted]" for text.
+            // Admin can fetch by id but must receive "[encrypted]" for others' text.
             CreateAndAuthenticateUser("entry_user", "entry_user@test.com");
             var add = new { query = "mutation { addJournalEntry(text:\"AdminCanSee\", moodId:1, secondaryEmotions:[]) { id } }" };
             var addResp = await _client.PostAsJsonAsync("/graphql", add);
@@ -146,14 +214,48 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
 
             CreateAndAuthenticateUser("admin", "admin@test.com", role: "Admin");
-            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }}}}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.DoesNotContain("AdminCanSee", json); // no plaintext
+            Assert.DoesNotContain("AdminCanSee", json); // no plaintext of other's entry
             Assert.Contains("\"text\":\"[encrypted]\"", json);
             Assert.DoesNotContain("not authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ---------------------------
+        // Anonymous access tests
+        // ---------------------------
+        [Fact]
+        public async Task GetJournalEntries_Denies_Anonymous()
+        {
+            _client.DefaultRequestHeaders.Authorization = null;
+
+            var payload = new { query = "{ journalEntries { id text } }" };
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task GetJournalEntryById_Denies_Anonymous()
+        {
+            // Seed an entry as any user
+            CreateAndAuthenticateUser("anon_seed_u", "anon_seed_u@test.com");
+            var add = new { query = "mutation { addJournalEntry(text:\"SeedAnon\", moodId:1, secondaryEmotions:[]) { id } }" };
+            var addResp = await _client.PostAsJsonAsync("/graphql", add);
+            var entryId = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
+                .RootElement.GetProperty("data").GetProperty("addJournalEntry").GetProperty("id").GetInt32();
+
+            _client.DefaultRequestHeaders.Authorization = null;
+
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }}}}" };
+            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         // ---------------------------
@@ -249,7 +351,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", update);
             var json = await resp.Content.ReadAsStringAsync();
 
-            // 🔧 Resolver returns: "Entry not found"
+            // Resolver returns: "Entry not found"
             Assert.Contains("Entry not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -353,7 +455,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             // GraphQL decrypts again
-            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }} }}" };
+            var query = new { query = $"{{ journalEntryById(id:{entryId}) {{ id text }}}}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             resp.EnsureSuccessStatusCode();
             var queryJson = await resp.Content.ReadAsStringAsync();
@@ -364,7 +466,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task JournalEntry_WithoutEnvelope_FailsGracefully()
         {
-            // Trigger DecryptionFailedException by providing an empty WrappedKeys map (no available KEK).
+            // Trigger DecryptionFailedException by providing an empty WrappedKeys map.
             var user = CreateAndAuthenticateUser("bad_env_user", "bad_env_user@test.com");
             int badEntryId;
 
@@ -375,8 +477,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 {
                     UserId = user.Id,
                     Text = "CorruptedCiphertext",
-                    DataNonce = "AAA=",   // dummy
-                    DataTag = "AAA=",     // dummy
+                    DataNonce = "AAA=",
+                    DataTag = "AAA=",
                     WrappedKeys = "{}",   // <- forces DecryptionFailedException in env.Decrypt
                     MoodId = 1,
                     CreatedAt = DateTime.UtcNow,
@@ -388,7 +490,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 badEntryId = entry.Id;
             }
 
-            var query = new { query = $"{{ journalEntryById(id:{badEntryId}) {{ id text }} }}" };
+            var query = new { query = $"{{ journalEntryById(id:{badEntryId}) {{ id text }}}}" };
             var resp = await _client.PostAsJsonAsync("/graphql", query);
             var json = await resp.Content.ReadAsStringAsync();
 

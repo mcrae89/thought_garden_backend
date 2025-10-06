@@ -15,11 +15,18 @@ public sealed class EnvelopeCrypto
     public EnvelopeCrypto(IConfiguration cfg)
     {
         var enc = cfg.GetSection("Encryption");
-        _primaryId = enc["ActivePrimaryKeyId"] ?? throw new("Encryption:ActivePrimaryKeyId missing");
-        _recoveryId = enc["ActiveRecoveryKeyId"] ?? throw new("Encryption:ActiveRecoveryKeyId missing");
 
+        // IDs come straight from configuration; provider is case-insensitive
+        _primaryId = (enc["ActivePrimaryKeyId"] ?? throw new("Encryption:ActivePrimaryKeyId missing")).Trim();
+        _recoveryId = (enc["ActiveRecoveryKeyId"] ?? throw new("Encryption:ActiveRecoveryKeyId missing")).Trim();
+
+        // Case-insensitive KEK dictionary so lookups work regardless of casing
         _keks = enc.GetSection("Keys").GetChildren()
-                   .ToDictionary(s => s.Key, s => Convert.FromBase64String(s.Value!));
+            .ToDictionary(
+                s => s.Key,
+                s => Convert.FromBase64String(s.Value!),
+                StringComparer.OrdinalIgnoreCase
+            );
 
         if (!_keks.ContainsKey(_primaryId) || !_keks.ContainsKey(_recoveryId))
             throw new InvalidOperationException("Active key ids must exist in Encryption:Keys");
@@ -96,7 +103,12 @@ public sealed class EnvelopeCrypto
         using (var g = new AesGcm(kek, tagSizeInBytes: TagSize))
             g.Encrypt(n, dek, c, t);
 
-        return Convert.ToBase64String(n.ToArray().Concat(t.ToArray()).Concat(c).ToArray());
+        var combined = new byte[NonceSize + TagSize + c.Length];
+        n.CopyTo(combined.AsSpan(0, NonceSize));
+        t.CopyTo(combined.AsSpan(NonceSize, TagSize));
+        Buffer.BlockCopy(c, 0, combined, NonceSize + TagSize, c.Length);
+
+        return Convert.ToBase64String(combined);
     }
 
     /// <summary>Try to unwrap a DEK from a WrappedKeys map using a specific keyId.</summary>
@@ -120,14 +132,20 @@ public sealed class EnvelopeCrypto
         using (var g = new AesGcm(kek, tagSizeInBytes: TagSize))
             g.Encrypt(n, dek, c, t);
 
-        return Convert.ToBase64String(n.ToArray().Concat(t.ToArray()).Concat(c).ToArray());
+        var combined = new byte[NonceSize + TagSize + c.Length];
+        n.CopyTo(combined.AsSpan(0, NonceSize));
+        t.CopyTo(combined.AsSpan(NonceSize, TagSize));
+        Buffer.BlockCopy(c, 0, combined, NonceSize + TagSize, c.Length);
+
+        return Convert.ToBase64String(combined);
     }
 
     private bool TryUnwrap(IReadOnlyDictionary<string, string> map, string keyId, out byte[] dek)
     {
         dek = Array.Empty<byte>();
-        if (!map.TryGetValue(keyId, out var b64) || !_keks.TryGetValue(keyId, out var kek))
-            return false;
+
+        if (!map.TryGetValue(keyId, out var b64)) return false;      // wrapped DEK present?
+        if (!_keks.TryGetValue(keyId, out var kek)) return false;     // KEK present?
 
         var raw = Convert.FromBase64String(b64);
         var n = raw.AsSpan(0, NonceSize);

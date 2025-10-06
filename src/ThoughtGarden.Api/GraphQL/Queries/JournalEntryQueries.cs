@@ -10,29 +10,32 @@ public class JournalEntryQueries
 {
     [Authorize]
     public IEnumerable<JournalEntryType> GetJournalEntries(
-        ClaimsPrincipal claims,
-        [Service] ThoughtGardenDbContext db,
-        [Service] EnvelopeCrypto crypto)
+    ClaimsPrincipal claims,
+    [Service] ThoughtGardenDbContext db,
+    [Service] EnvelopeCrypto crypto)
     {
         var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var role = claims.FindFirstValue(ClaimTypes.Role);
         var isAdmin = string.Equals(role, UserRole.Admin.ToString(), StringComparison.Ordinal);
 
-        var query = db.JournalEntries
+        var baseQuery = db.JournalEntries
             .AsNoTracking()
             .Include(e => e.Mood)
             .Include(e => e.SecondaryEmotions).ThenInclude(se => se.Emotion)
             .Where(j => !j.IsDeleted);
 
+        // Admins can view all; non-admins only their own
         var entries = isAdmin
-            ? query.ToList()                       // admin sees all, but no decryption
-            : query.Where(j => j.UserId == callerId).ToList();
+            ? baseQuery.ToList()
+            : baseQuery.Where(j => j.UserId == callerId).ToList();
 
         foreach (var e in entries)
         {
-            if (!isAdmin && e.UserId == callerId)
+            var isOwner = e.UserId == callerId;
+
+            if (isOwner)
             {
-                // Owner path: decrypt
+                // decrypt for owner (admin or not)
                 string plain;
                 try { plain = crypto.Decrypt(e.Text, e.DataNonce!, e.DataTag!, e.WrappedKeys!); }
                 catch (DecryptionFailedException) { throw new GraphQLException("Unable to decrypt journal entry."); }
@@ -49,13 +52,13 @@ public class JournalEntryQueries
                     SecondaryEmotions = e.SecondaryEmotions
                 };
             }
-            else
+            else if (isAdmin)
             {
-                // Admin (or any non-owner fallback) path: do NOT decrypt text
+                // admin on others' entries: do NOT decrypt
                 yield return new JournalEntryType
                 {
                     Id = e.Id,
-                    Text = "[encrypted]", // placeholder; do not expose ciphertext nor plaintext
+                    Text = "[encrypted]",
                     CreatedAt = e.CreatedAt,
                     UpdatedAt = e.UpdatedAt,
                     IsDeleted = e.IsDeleted,
@@ -64,8 +67,14 @@ public class JournalEntryQueries
                     SecondaryEmotions = e.SecondaryEmotions
                 };
             }
+            else
+            {
+                // non-admin, non-owner: blocked
+                throw new GraphQLException("Not authorized");
+            }
         }
     }
+
 
     [Authorize]
     public JournalEntryType GetJournalEntryById(

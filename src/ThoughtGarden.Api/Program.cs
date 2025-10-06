@@ -4,9 +4,30 @@ using Microsoft.IdentityModel.Tokens;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL.Mutations;
 using ThoughtGarden.Api.GraphQL.Queries;
+using ThoughtGarden.Api.Config;
 
+static string? FindUp(string startDir, string file)
+{
+    var dir = new DirectoryInfo(startDir);
+    while (dir is not null)
+    {
+        var candidate = System.IO.Path.Combine(dir.FullName, file);
+        if (File.Exists(candidate)) return candidate;
+        dir = dir.Parent;
+    }
+    return null;
+}
 
 var builder = WebApplication.CreateBuilder(args);
+
+var envPath = FindUp(builder.Environment.ContentRootPath, ".env");
+if (envPath is not null) DotEnv.Load(envPath);
+
+if (builder.Environment.IsDevelopment())
+{
+
+    builder.Configuration.AddDopplerSecrets(); // uses DOPPLER_TOKEN from .env
+}
 
 // Add services to container
 builder.Services.AddControllers();
