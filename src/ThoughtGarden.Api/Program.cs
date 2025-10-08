@@ -20,35 +20,40 @@ static string? FindUp(string startDir, string file)
 
 var builder = WebApplication.CreateBuilder(args);
 
+// .env for local dev only
 var envPath = FindUp(builder.Environment.ContentRootPath, ".env");
-if (envPath is not null) DotEnv.Load(envPath);
+if (envPath is not null && builder.Environment.IsDevelopment()) DotEnv.Load(envPath);
 
-if (builder.Environment.IsDevelopment())
-{
+// Doppler if present (dev or prod; harmless if absent)
+var dopplerToken = Environment.GetEnvironmentVariable("DOPPLER_TOKEN");
+if (!string.IsNullOrWhiteSpace(dopplerToken)) builder.Configuration.AddDopplerSecrets();
 
-    builder.Configuration.AddDopplerSecrets(); // uses DOPPLER_TOKEN from .env
-}
-
-// Add services to container
+// ---- Services ----
 builder.Services.AddControllers();
 
-// EF Core DbContext
-builder.Services.AddDbContext<ThoughtGardenDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-           .UseSnakeCaseNamingConvention()
-);
+// DbContext (pooling) + fail-fast for conn string
+var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection missing");
+builder.Services.AddDbContextPool<ThoughtGardenDbContext>(opt =>
+    opt.UseNpgsql(defaultConn).UseSnakeCaseNamingConvention());
 
+// DI helpers (add others you use in resolvers)
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddSingleton<EnvelopeCrypto>();
 
-
-// GraphQL (Hot Chocolate)
+// GraphQL + guardrails
 var gql = builder.Services
     .AddGraphQLServer()
     .AddAuthorization()
     .AddProjections()
     .AddFiltering()
     .AddSorting()
+    .AddMaxExecutionDepthRule(16)
+    .ModifyRequestOptions(o =>
+    {
+        o.ExecutionTimeout = TimeSpan.FromMinutes(2);
+        o.IncludeExceptionDetails = builder.Environment.IsDevelopment();
+    })
     .AddQueryType(d => d.Name("Query"))
         .AddTypeExtension<UserQueries>()
         .AddTypeExtension<JournalEntryQueries>()
@@ -70,65 +75,73 @@ if (builder.Environment.IsDevelopment())
     gql.AddTypeExtension<MaintenanceMutations>(); // dev-only
 }
 
-// Swagger for REST endpoints
+// Swagger (dev only)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS policy — allow all (safe for local dev)
+// CORS (dev: wide open; prod: restrict origins; JWT only => no credentials)
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
-    {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+    options.AddPolicy("DevAll", p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy("SpaHost", p => p
+        .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>())
+        .AllowAnyHeader()
+        .AllowAnyMethod());
 });
 
-// Authentication + Authorization
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// JWT (hardening)
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        var issuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
+        var audience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
+        var keyB64 = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
+        var keyBytes = Convert.FromBase64String(keyB64);
+
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.SaveToken = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = issuer,
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = audience,
             ValidateLifetime = true,
+            RequireExpirationTime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Convert.FromBase64String(builder.Configuration["Jwt:Key"]!)
-            )
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+            NameClaimType = "sub",
         };
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddHostedService<ThoughtGarden.Api.Infrastructure.DevSeedHostedService>();
 
+// Dev seed (dev only; add an env flag later if you want staging seeds)
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<ThoughtGarden.Api.Infrastructure.DevSeedHostedService>();
+}
 
 var app = builder.Build();
 
-// Enable CORS before routing
-app.UseCors();
-
-// Development tools
+// ---- Middleware ----
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+if (app.Environment.IsDevelopment()) app.UseCors("DevAll");
+else app.UseCors("SpaHost");
+
 app.UseHttpsRedirection();
 
-// Authentication + Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();        // REST
-app.MapGraphQL("/graphql");  // GraphQL
+app.MapControllers();
+app.MapGraphQL("/graphql");
 
 app.Run();
 
