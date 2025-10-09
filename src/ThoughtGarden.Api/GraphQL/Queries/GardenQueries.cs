@@ -14,7 +14,7 @@ namespace ThoughtGarden.Api.GraphQL.Queries
         {
             var callerId = int.Parse(claims.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = claims.FindFirstValue(ClaimTypes.Role);
-            if (callerId != userId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not Authorized");
+            if (callerId != userId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
             return db.GardenStates.Where(gs => gs.UserId == userId);
         }
 
@@ -29,7 +29,7 @@ namespace ThoughtGarden.Api.GraphQL.Queries
             if (garden == null) return null;
 
             if (!isAdmin && garden.UserId != callerId)
-                throw new GraphQLException("Not Authorized");
+                throw new GraphQLException("Not authorized");
 
             return garden;
         }

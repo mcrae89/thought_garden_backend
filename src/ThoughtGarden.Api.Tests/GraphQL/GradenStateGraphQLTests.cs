@@ -118,7 +118,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -179,7 +179,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var json = await resp.Content.ReadAsStringAsync();
 
             // Expect an authorization error in the response
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -236,7 +236,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var resp = await _client.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

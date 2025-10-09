@@ -107,7 +107,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             };
             var resp = await _clientDev.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -117,7 +117,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var payload = new { query = @"mutation { reencryptAfterCompromise(compromisedKeyId:""k_old"") }" };
             var resp = await _clientDev.PostAsJsonAsync("/graphql", payload);
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
 
         // ---------------------------
