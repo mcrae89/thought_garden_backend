@@ -8,6 +8,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [ExtendObjectType("Mutation")]
     public sealed class MaintenanceMutations
     {
+        private static bool IsDevOrTesting(Microsoft.Extensions.Hosting.IHostEnvironment envHost) => envHost.IsDevelopment() || envHost.IsEnvironment("Testing");
         // Re-wrap DEKs under a new primary (no data decrypt)
         [Authorize]
         public async Task<CombinedRewrapResult> RewrapAndPrunePrimary(
@@ -18,7 +19,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [Service] Microsoft.Extensions.Hosting.IHostEnvironment envHost,
     CancellationToken ct)
         {
-            if (!envHost.IsDevelopment()) throw new GraphQLException("not authorized");
+            if (!IsDevOrTesting(envHost)) throw new GraphQLException("not authorized");
 
             const int batchSize = 500;
             var result = new CombinedRewrapResult();
@@ -107,7 +108,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
     [Service] IHostEnvironment envHost,
     CancellationToken ct)
         {
-            if (!envHost.IsDevelopment()) throw new GraphQLException("not authorized");
+            if (!IsDevOrTesting(envHost)) throw new GraphQLException("not authorized");
 
             const int batchSize = 250;
             var lastId = 0;

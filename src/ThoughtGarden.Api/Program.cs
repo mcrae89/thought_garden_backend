@@ -20,22 +20,34 @@ static string? FindUp(string startDir, string file)
 
 var builder = WebApplication.CreateBuilder(args);
 
-// .env for local dev only
+// ---- Secrets loading policy ----
+// .env => Development only
 var envPath = FindUp(builder.Environment.ContentRootPath, ".env");
-if (envPath is not null && builder.Environment.IsDevelopment()) DotEnv.Load(envPath);
+if (envPath is not null && builder.Environment.IsDevelopment())
+{
+    DotEnv.Load(envPath);
+}
 
-// Doppler if present (dev or prod; harmless if absent)
+// Doppler => only when NOT Testing (dev/prod/staging allowed)
+var isTesting = builder.Environment.IsEnvironment("Testing");
 var dopplerToken = Environment.GetEnvironmentVariable("DOPPLER_TOKEN");
-if (!string.IsNullOrWhiteSpace(dopplerToken)) builder.Configuration.AddDopplerSecrets();
+if (!isTesting && !string.IsNullOrWhiteSpace(dopplerToken))
+{
+    builder.Configuration.AddDopplerSecrets();
+}
 
 // ---- Services ----
 builder.Services.AddControllers();
 
-// DbContext (pooling) + fail-fast for conn string
-var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection missing");
-builder.Services.AddDbContextPool<ThoughtGardenDbContext>(opt =>
-    opt.UseNpgsql(defaultConn).UseSnakeCaseNamingConvention());
+// DbContext registration
+// In Testing, skip registration entirely; the test factory will inject a container DB.
+if (!isTesting)
+{
+    var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection missing");
+    builder.Services.AddDbContextPool<ThoughtGardenDbContext>(opt =>
+        opt.UseNpgsql(defaultConn).UseSnakeCaseNamingConvention());
+}
 
 // DI helpers (add others you use in resolvers)
 builder.Services.AddScoped<JwtHelper>();
@@ -70,9 +82,9 @@ var gql = builder.Services
         .AddTypeExtension<GardenPlantMutations>()
         .AddTypeExtension<PlantTypeMutations>();
 
-if (builder.Environment.IsDevelopment())
+if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"))
 {
-    gql.AddTypeExtension<MaintenanceMutations>(); // dev-only
+    gql.AddTypeExtension<MaintenanceMutations>();
 }
 
 // Swagger (dev only)
@@ -117,7 +129,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// Dev seed (dev only; add an env flag later if you want staging seeds)
+// Dev seed (dev only)
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<ThoughtGarden.Api.Infrastructure.DevSeedHostedService>();

@@ -26,21 +26,43 @@ namespace ThoughtGarden.Api.Tests.Factories
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Force the app into "Testing" so Program.cs skips Doppler/.env and default DbContext.
+            builder.UseEnvironment("Testing");
+
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                // Make the app’s auth use our test values (so tokens validate)
+                var primaryId = "test-primary";
+                var recoveryId = "test-recovery";
+                var primaryB64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                var recoveryB64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
                 var dict = new Dictionary<string, string?>
                 {
-                    { "Jwt:Key", JwtKey },
-                    { "Jwt:Issuer", JwtIssuer },
-                    { "Jwt:Audience", JwtAudience }
+                    // JWT used by tests
+                    ["Jwt:Key"] = JwtKey,
+                    ["Jwt:Issuer"] = JwtIssuer,
+                    ["Jwt:Audience"] = JwtAudience,
+
+                    // DB (factory re-wires DbContext to this Testcontainers connection)
+                    ["ConnectionStrings:DefaultConnection"] = _connectionString,
+
+                    // ✅ EXACT shape EnvelopeCrypto expects
+                    ["Encryption:ActivePrimaryKeyId"] = primaryId,
+                    ["Encryption:ActiveRecoveryKeyId"] = recoveryId,
+                    // children under Encryption:Keys with a *value* (no :Key)
+                    [$"Encryption:Keys:{primaryId}"] = primaryB64,
+                    [$"Encryption:Keys:{recoveryId}"] = recoveryB64,
+
+                    // optional legacy key (safe to keep)
+                    ["Encryption:JournalEncryptionKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 };
-                config.AddInMemoryCollection(dict!);
+
+                config.AddInMemoryCollection(dict);
             });
 
             builder.ConfigureServices(services =>
             {
-                // Remove app’s default DbContext registration
+                // Remove app’s default DbContext registration (if any slipped in).
                 var descriptor = services.SingleOrDefault(
                     d => d.ServiceType == typeof(DbContextOptions<ThoughtGardenDbContext>));
                 if (descriptor is not null)
@@ -53,7 +75,7 @@ namespace ThoughtGarden.Api.Tests.Factories
                     options
                         .UseNpgsql(_connectionString, npgsql =>
                             npgsql.MigrationsAssembly(typeof(ThoughtGardenDbContext).Assembly.FullName))
-                        .UseSnakeCaseNamingConvention() // <-- this makes test DB tables/columns snake_case like prod
+                        .UseSnakeCaseNamingConvention()
                 );
 
                 // Apply migrations and seed baseline data
