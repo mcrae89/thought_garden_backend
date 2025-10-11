@@ -1,29 +1,49 @@
 name: backend-ci
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  push: { branches: [ main ] }
+  pull_request: { branches: [ main ] }
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      TESTCONTAINERS_CHECKS_DISABLE: "true"
+      DOCKER_BUILDKIT: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+
+      - name: Verify Docker
+        run: |
+          docker version
+          docker info
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
         with:
-          dotnet-version: '8.0.x'
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
 
-      - name: Restore dependencies
+      - name: Restore
         run: dotnet restore ThoughtGarden.sln
 
       - name: Build
         run: dotnet build ThoughtGarden.sln --no-restore --configuration Release
 
-      - name: Run tests
+      - name: Test (Testcontainers)
         run: dotnet test ThoughtGarden.sln --no-build --configuration Release --verbosity normal
+
+      - name: Cleanup Docker (since Ryuk is off)
+        if: always()
+        run: |
+          docker ps -aq | xargs -r docker rm -fv
+          docker network prune -f
+          docker volume prune -f
