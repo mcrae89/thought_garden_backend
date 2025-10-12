@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Reflection;
+﻿// src/ThoughtGarden.Api/Controllers/HealthController.cs
+using Microsoft.AspNetCore.Mvc;
+using ThoughtGarden.Api.Infrastructure;
 
 namespace ThoughtGarden.Api.Controllers;
 
@@ -7,24 +8,9 @@ namespace ThoughtGarden.Api.Controllers;
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
+    private readonly IServerInfoProvider _provider;
+    public HealthController(IServerInfoProvider provider) => _provider = provider;
+
     [HttpGet]
-    public IActionResult Get()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var version = assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion
-            ?? assembly.GetName().Version?.ToString()
-            ?? "unknown";
-
-        var timeZone = TimeZoneInfo.Local.DisplayName;
-
-        return Ok(new
-        {
-            status = "Healthy",
-            timestamp = DateTime.Now,
-            timeZone,
-            version
-        });
-    }
+    public IActionResult Get() => Ok(_provider.Get());
 }

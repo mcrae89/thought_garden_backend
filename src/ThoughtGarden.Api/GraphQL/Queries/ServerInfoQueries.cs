@@ -1,28 +1,10 @@
-﻿using System.Reflection;
+﻿// src/ThoughtGarden.Api/GraphQL/Queries/ServerInfoQueries.cs
+using ThoughtGarden.Api.Infrastructure;
 
-namespace ThoughtGarden.Api.GraphQL.Queries
+namespace ThoughtGarden.Api.GraphQL.Queries;
+
+[ExtendObjectType("Query")]
+public sealed class ServerInfoQueries
 {
-    public class ServerInfo
-    {
-        public string Status { get; set; } = "Healthy";
-        public DateTime Timestamp { get; set; } = DateTime.Now;
-        public string TimeZone { get; set; } = TimeZoneInfo.Local.DisplayName;
-        public string Version { get; set; } = "unknown";
-    }
-
-    [ExtendObjectType("Query")]
-    public class ServerInfoQueries
-    {
-        public ServerInfo GetServerInfo()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            var version = assembly.GetName().Version?.ToString() ?? "unknown";
-
-            return new ServerInfo
-            {
-                Status = "Healthy",
-                Version = version
-            };
-        }
-    }
+    public ServerInfo ServerInfo([Service] IServerInfoProvider provider) => provider.Get();
 }

@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using ThoughtGarden.Api.Config;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL.Mutations;
 using ThoughtGarden.Api.GraphQL.Queries;
-using ThoughtGarden.Api.Config;
+using ThoughtGarden.Api.Infrastructure;
 
 static string? FindUp(string startDir, string file)
 {
@@ -52,6 +53,7 @@ if (!isTesting)
 // DI helpers (add others you use in resolvers)
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddSingleton<EnvelopeCrypto>();
+builder.Services.AddSingleton<IServerInfoProvider, ServerInfoProvider>();
 
 // GraphQL + guardrails
 var gql = builder.Services
