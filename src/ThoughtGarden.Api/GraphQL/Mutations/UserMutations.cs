@@ -22,7 +22,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
                 throw new GraphQLException("Not authorized to update this user");
 
             var user = await db.Users.FindAsync(id);
-            if (user == null) return null;
+            if (user == null) throw new GraphQLException("User not found");
 
             if (!string.IsNullOrWhiteSpace(userName)) user.UserName = userName;
             if (!string.IsNullOrWhiteSpace(email)) user.Email = email;
@@ -43,7 +43,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
                 throw new GraphQLException("Not authorized to delete this user");
 
             var user = await db.Users.FindAsync(id);
-            if (user == null) return false;
+            if (user == null) throw new GraphQLException("User not found");
 
             db.Users.Remove(user);  // hard delete for now (MVP)
             await db.SaveChangesAsync();
