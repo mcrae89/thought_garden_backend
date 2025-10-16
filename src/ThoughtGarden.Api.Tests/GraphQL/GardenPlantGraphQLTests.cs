@@ -307,7 +307,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("null", json);
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -450,6 +451,26 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
+        public async Task MatureGardenPlant_Returns_Error_When_Not_Found()
+        {
+            var user = EnsureUser("gp_mature_nf", "gp_mature_nf@test.com");
+            Authenticate(user, "User");
+
+            var payload = new
+            {
+                query = "mutation { matureGardenPlant(plantId:99999) { id stage } }"
+            };
+
+            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            resp.EnsureSuccessStatusCode(); // now returns 200 with top-level errors
+            var json = await resp.Content.ReadAsStringAsync();
+
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
+        }
+
+
+        [Fact]
         public async Task MatureGardenPlant_Denies_Other_User()
         {
             var u1 = EnsureUser("gp_mature_u1", "gp_mature_u1@test.com");
@@ -541,7 +562,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("null", json);
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -605,7 +627,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("null", json);
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -667,7 +690,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("null", json);
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -731,7 +755,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("false", json);
+            Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

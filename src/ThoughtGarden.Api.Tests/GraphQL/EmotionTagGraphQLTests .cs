@@ -178,7 +178,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("\"updateEmotionTag\":null", json);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -237,7 +237,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("false", json);
+            Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

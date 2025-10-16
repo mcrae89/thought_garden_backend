@@ -20,7 +20,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
         public async Task<EmotionTag?> UpdateEmotionTag(int id, string? name, string? color, string? icon, [Service] ThoughtGardenDbContext db)
         {
             var tag = await db.EmotionTags.FindAsync(id);
-            if (tag == null) return null;
+            if (tag == null) throw new GraphQLException("Emotion tag not found");
 
             if (!string.IsNullOrWhiteSpace(name)) tag.Name = name;
             if (!string.IsNullOrWhiteSpace(color)) tag.Color = color;
@@ -34,7 +34,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
         public async Task<bool> DeleteEmotionTag(int id, [Service] ThoughtGardenDbContext db)
         {
             var tag = await db.EmotionTags.FindAsync(id);
-            if (tag == null) return false;
+            if (tag == null) throw new GraphQLException("Emotion tag not found");
 
             db.EmotionTags.Remove(tag);
             await db.SaveChangesAsync();

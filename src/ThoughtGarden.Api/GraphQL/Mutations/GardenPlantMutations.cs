@@ -31,7 +31,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             var role = claims.FindFirstValue(ClaimTypes.Role);
 
             var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == plantId);
-            if (plant == null) return null;
+            if (plant == null) throw new GraphQLException("Plant not found");
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
             plant.GrowthProgress = plant.GrowthProgress + (5 * growthMultiplier);
@@ -88,7 +88,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             var role = claims.FindFirstValue(ClaimTypes.Role);
 
             var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == plantId);
-            if (plant == null) return null;
+            if (plant == null) throw new GraphQLException("Plant not found");
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
             plant.Order = newOrder;
@@ -104,7 +104,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             var role = claims.FindFirstValue(ClaimTypes.Role);
 
             var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == plantId);
-            if (plant == null) return null;
+            if (plant == null) throw new GraphQLException("Plant not found");
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
             plant.IsStored = true;
@@ -120,7 +120,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             var role = claims.FindFirstValue(ClaimTypes.Role);
 
             var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == plantId);
-            if (plant == null) return null;
+            if (plant == null) throw new GraphQLException("Plant not found");
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
             plant.IsStored = false;
@@ -137,7 +137,7 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             var role = claims.FindFirstValue(ClaimTypes.Role);
 
             var plant = await db.GardenPlants.Include(p => p.GardenState).FirstOrDefaultAsync(p => p.Id == id);
-            if (plant == null) return false;
+            if (plant == null) throw new GraphQLException("Plant not found");
             if (plant.GardenState.UserId != callerId && role != UserRole.Admin.ToString()) throw new GraphQLException("Not authorized");
 
             db.GardenPlants.Remove(plant);
