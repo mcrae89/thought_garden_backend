@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using ThoughtGarden.Api.Config;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL.Mutations;
@@ -34,6 +36,9 @@ var isTesting = builder.Environment.IsEnvironment("Testing");
 var dopplerToken = Environment.GetEnvironmentVariable("DOPPLER_TOKEN");
 if (!isTesting && !string.IsNullOrWhiteSpace(dopplerToken))
 {
+    builder.Configuration
+    .AddEnvironmentVariables();
+
     builder.Configuration.AddDopplerSecrets();
 }
 
@@ -103,14 +108,14 @@ builder.Services.AddCors(options =>
         .AllowAnyMethod());
 });
 
-// JWT (hardening)
+JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         var issuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
         var audience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
-        var keyB64 = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
-        var keyBytes = Convert.FromBase64String(keyB64);
+        var keyBytes = JwtHelper.GetJwtKeyBytes(builder.Configuration);
 
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = false;
@@ -126,8 +131,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
             NameClaimType = "sub",
+            RoleClaimType = ClaimTypes.Role
         };
     });
+
 
 builder.Services.AddAuthorization();
 

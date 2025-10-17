@@ -434,18 +434,15 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
-        public async Task RefreshToken_Fails_When_Not_Authenticated()
+        public async Task RefreshToken_Fails_With_Invalid_Token()
         {
-            var refresh = new
-            {
-                query = $"mutation {{ refreshToken(refreshToken:\"bogus\") {{ accessToken refreshToken }} }}"
-            };
+            var refresh = new { query = "mutation { refreshToken(refreshToken:\"bogus\") { accessToken refreshToken } }" };
 
             var resp = await _client.PostAsJsonAsync("/graphql", refresh);
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("not authorized", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Invalid or expired", json, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

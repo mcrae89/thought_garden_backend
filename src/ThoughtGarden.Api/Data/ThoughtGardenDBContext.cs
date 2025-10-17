@@ -85,11 +85,35 @@ namespace ThoughtGarden.Api.Data
                 .IsRequired();
 
             // ---- RefreshToken → User ----
-            modelBuilder.Entity<RefreshToken>()
-                .HasOne(rt => rt.User)
-                .WithMany(u => u.RefreshTokens)
-                .HasForeignKey(rt => rt.UserId)
-                .IsRequired();
+            modelBuilder.Entity<RefreshToken>(e =>
+            {
+                // Required FK → User (you already have this below; keeping here for clarity)
+                e.HasOne(rt => rt.User)
+                 .WithMany(u => u.RefreshTokens)
+                 .HasForeignKey(rt => rt.UserId)
+                 .IsRequired()
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                // Hash is required; SHA-256 hex is 64 chars
+                e.Property(rt => rt.TokenHash)
+                 .IsRequired()
+                 .HasMaxLength(64);
+
+                e.HasIndex(rt => rt.TokenHash);                      // lookup incoming token
+                e.HasIndex(rt => new { rt.UserId, rt.RevokedAt });   // revoke/filter active per user
+                e.HasIndex(rt => new { rt.ExpiresAt, rt.RevokedAt }); // cleanup/expiry scans
+
+                // Ensure we always persist/read UTC
+                e.Property(rt => rt.CreatedAt).HasConversion(
+                    v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                    v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+                e.Property(rt => rt.ExpiresAt).HasConversion(
+                    v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                    v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+                e.Property(rt => rt.RevokedAt).HasConversion(
+                    v => v == null ? (DateTime?)null : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc),
+                    v => v == null ? (DateTime?)null : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc));
+            });
 
             // ---- User → SubscriptionPlan ----
             modelBuilder.Entity<User>()

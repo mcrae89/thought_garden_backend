@@ -1,10 +1,9 @@
-﻿using System.Security.Cryptography;
-using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql.EntityFrameworkCore.PostgreSQL; // <-- needed for UseSnakeCaseNamingConvention
+using System.Security.Cryptography;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Models;
 
@@ -18,6 +17,8 @@ namespace ThoughtGarden.Api.Tests.Factories
         public string JwtKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         public string JwtIssuer { get; } = "TestIssuer";
         public string JwtAudience { get; } = "TestAudience";
+        public string JwtAccessTokenMinutes { get; } = "15";
+        public string JwtRefreshTokenDays { get; } = "7";
 
         public ApiFactory(string connectionString)
         {
@@ -42,11 +43,13 @@ namespace ThoughtGarden.Api.Tests.Factories
                     ["Jwt:Key"] = JwtKey,
                     ["Jwt:Issuer"] = JwtIssuer,
                     ["Jwt:Audience"] = JwtAudience,
+                    ["Jwt:AccessTokenMinutes"] = JwtAccessTokenMinutes,
+                    ["Jwt:RefreshTokenDays"] = JwtRefreshTokenDays,
 
                     // DB (factory re-wires DbContext to this Testcontainers connection)
                     ["ConnectionStrings:DefaultConnection"] = _connectionString,
 
-                    // ✅ EXACT shape EnvelopeCrypto expects
+                    // EXACT shape EnvelopeCrypto expects
                     ["Encryption:ActivePrimaryKeyId"] = primaryId,
                     ["Encryption:ActiveRecoveryKeyId"] = recoveryId,
                     // children under Encryption:Keys with a *value* (no :Key)
