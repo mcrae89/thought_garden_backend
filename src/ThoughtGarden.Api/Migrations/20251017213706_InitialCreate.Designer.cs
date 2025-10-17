@@ -12,8 +12,8 @@ using ThoughtGarden.Api.Data;
 namespace ThoughtGarden.Api.Migrations
 {
     [DbContext(typeof(ThoughtGardenDbContext))]
-    [Migration("20251017204209_UpdatingTokenLogic")]
-    partial class UpdatingTokenLogic
+    [Migration("20251017213706_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

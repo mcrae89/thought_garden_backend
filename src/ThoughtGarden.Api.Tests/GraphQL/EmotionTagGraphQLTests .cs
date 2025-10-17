@@ -1,11 +1,10 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.Tests.Factories;
 using ThoughtGarden.Api.Tests.Utils;
 using ThoughtGarden.Models;
+using Xunit;
+using static ThoughtGarden.Api.Tests.Utils.GraphQLTestClient;
 
 namespace ThoughtGarden.Api.Tests.GraphQL
 {
@@ -42,16 +41,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 db.Users.Add(u);
                 db.SaveChanges();
             }
-
             return (u.Id, u.UserName, u.Email);
-        }
-
-        private void Authenticate((int Id, string UserName, string Email) user, string role)
-        {
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                user.Id, user.UserName, user.Email, role);
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         private int GetAnyEmotionTagId()
@@ -69,10 +59,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetEmotions_Returns_SeededTags()
         {
             var user = EnsureUser("query_emotions", "query_emotions@test.com");
-            Authenticate(user, "User");
 
             var query = new { query = "{ emotions { id name color } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            var resp = await PostAsUserAsync(_client, _factory, query, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -84,11 +73,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetEmotionById_Returns_One()
         {
             var user = EnsureUser("query_emotion_byid", "query_emotion_byid@test.com");
-            Authenticate(user, "User");
             var etid = GetAnyEmotionTagId();
 
             var query = new { query = $"{{ emotionById(id:{etid}) {{ id name }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            var resp = await PostAsUserAsync(_client, _factory, query, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -97,17 +85,16 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         }
 
         [Fact]
-        public async Task GetEmotionById_Returns_Empty_For_InvalidId()
+        public async Task GetEmotionById_Returns_Null_For_InvalidId()
         {
             var user = EnsureUser("query_invalid", "query_invalid@test.com");
-            Authenticate(user, "User");
 
             var query = new { query = "{ emotionById(id:9999) { id name } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", query);
+            var resp = await PostAsUserAsync(_client, _factory, query, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
-            Assert.Contains("\"emotionById\":[]", json);
+            Assert.Contains("\"emotionById\":null", json);
         }
 
         // ---------------------------
@@ -118,10 +105,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task AddEmotionTag_Allows_Admin()
         {
             var admin = EnsureUser("admin_addtag", "admin_addtag@test.com", UserRole.Admin);
-            Authenticate(admin, "Admin");
 
             var mutation = new { query = "mutation { addEmotionTag(name:\"Joy\", color:\"#ff0\", icon:\"smile\") { id name color icon } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, admin, "Admin");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -132,10 +118,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task AddEmotionTag_Fails_For_User()
         {
             var user = EnsureUser("user_addtag", "user_addtag@test.com", UserRole.User);
-            Authenticate(user, "User");
 
             var mutation = new { query = "mutation { addEmotionTag(name:\"Blocked\", color:\"#000\", icon:\"ban\") { id name } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -146,7 +131,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task AddEmotionTag_Denies_Anonymous()
         {
             var mutation = new { query = "mutation { addEmotionTag(name:\"Anon\", color:\"#123\", icon:\"ghost\") { id name } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostGraphQLAsync(_client, mutation);
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -156,11 +141,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdateEmotionTag_Allows_Admin()
         {
             var admin = EnsureUser("admin_updatetag", "admin_updatetag@test.com", UserRole.Admin);
-            Authenticate(admin, "Admin");
             var etid = GetAnyEmotionTagId();
 
             var mutation = new { query = $"mutation {{ updateEmotionTag(id:{etid}, name:\"Updated\", color:\"#abc\", icon:\"edit\") {{ id name color icon }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, admin, "Admin");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -171,10 +155,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdateEmotionTag_Returns_Null_When_NotFound()
         {
             var admin = EnsureUser("admin_updatenull", "admin_updatenull@test.com", UserRole.Admin);
-            Authenticate(admin, "Admin");
 
             var mutation = new { query = "mutation { updateEmotionTag(id:9999, name:\"Ghost\") { id name } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, admin, "Admin");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -185,11 +168,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdateEmotionTag_Fails_For_User()
         {
             var user = EnsureUser("user_updatetag", "user_updatetag@test.com", UserRole.User);
-            Authenticate(user, "User");
             var etid = GetAnyEmotionTagId();
 
             var mutation = new { query = $"mutation {{ updateEmotionTag(id:{etid}, name:\"Hacker\") {{ id name }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -200,7 +182,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task UpdateEmotionTag_Denies_Anonymous()
         {
             var mutation = new { query = "mutation { updateEmotionTag(id:1, name:\"AnonUpdate\") { id name } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostGraphQLAsync(_client, mutation);
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -210,16 +192,15 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteEmotionTag_Allows_Admin()
         {
             var admin = EnsureUser("admin_deletetag", "admin_deletetag@test.com", UserRole.Admin);
-            Authenticate(admin, "Admin");
 
             var add = new { query = "mutation { addEmotionTag(name:\"TempDel\", color:\"#ccc\", icon:\"trash\") { id } }" };
-            var addResp = await _client.PostAsJsonAsync("/graphql", add);
+            var addResp = await PostAsUserAsync(_client, _factory, add, admin, "Admin");
             addResp.EnsureSuccessStatusCode();
-            var id = JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
+            var id = System.Text.Json.JsonDocument.Parse(await addResp.Content.ReadAsStringAsync())
                 .RootElement.GetProperty("data").GetProperty("addEmotionTag").GetProperty("id").GetInt32();
 
             var del = new { query = $"mutation {{ deleteEmotionTag(id:{id}) }}" };
-            var delResp = await _client.PostAsJsonAsync("/graphql", del);
+            var delResp = await PostAsUserAsync(_client, _factory, del, admin, "Admin");
             delResp.EnsureSuccessStatusCode();
             var json = await delResp.Content.ReadAsStringAsync();
 
@@ -230,10 +211,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteEmotionTag_Returns_False_When_NotFound()
         {
             var admin = EnsureUser("admin_deletefail", "admin_deletefail@test.com", UserRole.Admin);
-            Authenticate(admin, "Admin");
 
             var mutation = new { query = "mutation { deleteEmotionTag(id:9999) }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, admin, "Admin");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -244,11 +224,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteEmotionTag_Fails_For_User()
         {
             var user = EnsureUser("user_deletefail", "user_deletefail@test.com", UserRole.User);
-            Authenticate(user, "User");
             var etid = GetAnyEmotionTagId();
 
             var mutation = new { query = $"mutation {{ deleteEmotionTag(id:{etid}) }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostAsUserAsync(_client, _factory, mutation, user, "User");
             resp.EnsureSuccessStatusCode();
 
             var json = await resp.Content.ReadAsStringAsync();
@@ -259,7 +238,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteEmotionTag_Denies_Anonymous()
         {
             var mutation = new { query = "mutation { deleteEmotionTag(id:1) }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", mutation);
+            var resp = await PostGraphQLAsync(_client, mutation);
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
