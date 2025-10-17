@@ -6,7 +6,7 @@
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
-        public string Token { get; set; } = null!;
+        public string TokenHash { get; set; } = default!;
         public DateTime ExpiresAt { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? RevokedAt { get; set; }

@@ -2,14 +2,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.GraphQL.Mutations;
 using ThoughtGarden.Api.Tests.Factories;
 using ThoughtGarden.Api.Tests.Utils;
 using ThoughtGarden.Models;
+using Xunit;
+using static ThoughtGarden.Api.Tests.Utils.GraphQLTestClient;
 
 namespace ThoughtGarden.Api.Tests.GraphQL
 {
@@ -27,7 +27,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         // ---------------------------
         // Helpers
         // ---------------------------
-        private (int Id, string UserName, string Email) CreateAndAuthenticateUser(string userName, string email, string role = "Admin")
+        private (int Id, string UserName, string Email) CreateUser(string userName, string email, string role = "Admin")
         {
             using var scope = _factoryDev.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -44,10 +44,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             db.Users.Add(user);
             db.SaveChanges();
 
-            var token = JwtTokenGenerator.GenerateToken(_factoryDev.JwtKey, "TestIssuer", "TestAudience",
-                user.Id, user.UserName, user.Email, role);
-
-            _clientDev.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             return (user.Id, user.UserName, user.Email);
         }
 
@@ -96,7 +92,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task RewrapAndPrunePrimary_Denies_Anonymous()
         {
-            _clientDev.DefaultRequestHeaders.Authorization = null;
             var payload = new
             {
                 query = @"mutation {
@@ -105,7 +100,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                   }
                 }"
             };
-            var resp = await _clientDev.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostGraphQLAsync(_clientDev, payload);
             var json = await resp.Content.ReadAsStringAsync();
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
@@ -113,9 +108,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task ReencryptAfterCompromise_Denies_Anonymous()
         {
-            _clientDev.DefaultRequestHeaders.Authorization = null;
             var payload = new { query = @"mutation { reencryptAfterCompromise(compromisedKeyId:""k_old"") }" };
-            var resp = await _clientDev.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostGraphQLAsync(_clientDev, payload);
             var json = await resp.Content.ReadAsStringAsync();
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
         }
@@ -140,24 +134,21 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Contains("not authorized", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
 
-
         [Fact]
         public async Task ReencryptAfterCompromise_Throws_NotAuthorized_When_NotDev()
         {
-            // Use live services from the dev test server
             using var scope = _factoryDev.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
             var env = scope.ServiceProvider.GetRequiredService<EnvelopeCrypto>();
 
             var resolver = new MaintenanceMutations();
-            var prodHost = new TestHostEnv(Environments.Production); // pretend non-Dev
+            var prodHost = new TestHostEnv(Environments.Production);
 
             var ex = await Assert.ThrowsAsync<GraphQLException>(() =>
                 resolver.ReencryptAfterCompromise(env.PrimaryKeyId, db, env, prodHost, CancellationToken.None));
 
             Assert.Contains("not authorized", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
-
 
         // ---------------------------
         // Happy paths (HTTP)
@@ -166,8 +157,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task RewrapAndPrunePrimary_HappyPath_Updates_And_Prunes()
         {
-            // Admin auth
-            CreateAndAuthenticateUser("admin_dev", "admin_dev@test.com", role: "Admin");
+            // Admin auth (per-request)
+            var admin = CreateUser("admin_dev", "admin_dev@test.com", role: "Admin");
 
             // Get ids from live crypto
             string oldPrimaryId, recoveryId;
@@ -180,7 +171,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
 
             // Seed a REAL entry (envelope produced by the API so WrappedKeys is valid)
             var add = new { query = @"mutation { addJournalEntry(text:""RotateMe"", moodId:1, secondaryEmotions:[]) { id } }" };
-            var addResp = await _clientDev.PostAsJsonAsync("/graphql", add);
+            var addResp = await PostAsUserAsync(_clientDev, _factoryDev, add, admin, "Admin");
             var addBody = await addResp.Content.ReadAsStringAsync();
             Assert.True(addResp.IsSuccessStatusCode, $"addJournalEntry failed: {addBody}");
             Assert.Contains("\"id\":", addBody);
@@ -194,7 +185,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
           }}
         }}"
             };
-            var resp = await _clientDev.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_clientDev, _factoryDev, payload, admin, "Admin");
             var body = await resp.Content.ReadAsStringAsync();
             Assert.True(resp.IsSuccessStatusCode, $"rewrapAndPrunePrimary failed: {body}");
             Assert.DoesNotContain(@"""errors""", body, StringComparison.OrdinalIgnoreCase);
@@ -205,7 +196,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         [Fact]
         public async Task ReencryptAfterCompromise_HappyPath_Reencrypts()
         {
-            CreateAndAuthenticateUser("admin_dev2", "admin_dev2@test.com", role: "Admin");
+            var admin = CreateUser("admin_dev2", "admin_dev2@test.com", role: "Admin");
 
             string primaryId, recoveryId;
             using (var scope = _factoryDev.Services.CreateScope())
@@ -216,13 +207,12 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var add = new { query = @"mutation { addJournalEntry(text:""RotateMe"", moodId:1, secondaryEmotions:[]) { id } }" };
-            var addResp = await _clientDev.PostAsJsonAsync("/graphql", add);
+            var addResp = await PostAsUserAsync(_clientDev, _factoryDev, add, admin, "Admin");
             var addBody = await addResp.Content.ReadAsStringAsync();
             Assert.True(addResp.IsSuccessStatusCode, $"addJournalEntry failed: {addBody}");
 
-            // use active primary as compromised key (safe with the cursor patch)
             var run = new { query = $@"mutation {{ reencryptAfterCompromise(compromisedKeyId:""{primaryId}"") }}" };
-            var runResp = await _clientDev.PostAsJsonAsync("/graphql", run);
+            var runResp = await PostAsUserAsync(_clientDev, _factoryDev, run, admin, "Admin");
             var runBody = await runResp.Content.ReadAsStringAsync();
             Assert.True(runResp.IsSuccessStatusCode, $"reencryptAfterCompromise failed: {runBody}");
             Assert.DoesNotContain(@"""errors""", runBody, StringComparison.OrdinalIgnoreCase);
@@ -232,13 +222,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var db2 = scope2.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
             var row = await db2.JournalEntries.AsNoTracking().OrderByDescending(x => x.Id).FirstAsync();
 
-            using var doc = System.Text.Json.JsonDocument.Parse(row.WrappedKeys!);
+            using var doc = JsonDocument.Parse(row.WrappedKeys!);
             var root = doc.RootElement;
-            Assert.True(root.TryGetProperty(primaryId, out _));   // wrapped to active primary
-            Assert.True(root.TryGetProperty(recoveryId, out _));  // and recovery
+            Assert.True(root.TryGetProperty(primaryId, out _));
+            Assert.True(root.TryGetProperty(recoveryId, out _));
         }
-
-
 
         // ---------------------------
         // Negative cases on resolver (counters)
@@ -252,12 +240,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var env = scope.ServiceProvider.GetRequiredService<EnvelopeCrypto>();
             var devHost = new TestHostEnv(Environments.Development);
 
-            // Clean a small playground (optional if tests isolate DB)
             db.JournalEntries.RemoveRange(db.JournalEntries);
             await db.SaveChangesAsync();
 
             var oldId = env.PrimaryKeyId;
-            var newId = env.RecoveryKeyId; // guaranteed to exist in KEK ring
+            var newId = env.RecoveryKeyId;
 
             // 1) invalid JSON
             db.JournalEntries.Add(new JournalEntry { UserId = 1, Text = "c", DataNonce = "AAA=", DataTag = "AAA=", WrappedKeys = "not-json" });
@@ -275,7 +262,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             Assert.Equal(1, result.AlreadyUpToDate);
         }
 
-
         // ---------------------------
         // Test helpers
         // ---------------------------
@@ -287,7 +273,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 EnvironmentName = name;
                 ApplicationName = "Tests";
                 ContentRootPath = AppContext.BaseDirectory;
-                ContentRootFileProvider = new PhysicalFileProvider(ContentRootPath); // or new NullFileProvider()
+                ContentRootFileProvider = new PhysicalFileProvider(ContentRootPath);
             }
 
             public string EnvironmentName { get; set; }
@@ -295,6 +281,5 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             public string ContentRootPath { get; set; }
             public IFileProvider ContentRootFileProvider { get; set; }
         }
-
     }
 }

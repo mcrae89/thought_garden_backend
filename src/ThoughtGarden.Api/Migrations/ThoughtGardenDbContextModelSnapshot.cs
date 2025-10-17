@@ -387,10 +387,11 @@ namespace ThoughtGarden.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("token");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer")
@@ -399,8 +400,14 @@ namespace ThoughtGarden.Api.Migrations
                     b.HasKey("Id")
                         .HasName("pk_refresh_tokens");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_refresh_tokens_user_id");
+                    b.HasIndex("TokenHash")
+                        .HasDatabaseName("ix_refresh_tokens_token_hash");
+
+                    b.HasIndex("ExpiresAt", "RevokedAt")
+                        .HasDatabaseName("ix_refresh_tokens_expires_at_revoked_at");
+
+                    b.HasIndex("UserId", "RevokedAt")
+                        .HasDatabaseName("ix_refresh_tokens_user_id_revoked_at");
 
                     b.ToTable("refresh_tokens", (string)null);
                 });

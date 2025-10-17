@@ -72,20 +72,47 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
         }
 
         // Login
-        public async Task<AuthPayload> LoginUser(string email,string password,[Service] ThoughtGardenDbContext db,[Service] JwtHelper jwtHelper)
+        public async Task<AuthPayload> LoginUser(string email, string password, [Service] ThoughtGardenDbContext db, [Service] IConfiguration config, [Service] JwtHelper jwtHelper)
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) throw new GraphQLException("User not found");
+            if (!PasswordHelper.VerifyPassword(password, user.PasswordHash)) throw new GraphQLException("Invalid password");
 
-            if (!PasswordHelper.VerifyPassword(password, user.PasswordHash))
-                throw new GraphQLException("Invalid password");
+            var now = DateTime.UtcNow;
+            const int MaxActiveRefreshTokens = 4; // keep the newest 4
 
-            return new AuthPayload
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            await db.RefreshTokens
+                .Where(r => r.UserId == user.Id && r.ExpiresAt <= now)
+                .ExecuteDeleteAsync();
+
+            // Prune extras (keep newest 4 active; revoke the rest) — single SQL UPDATE
+            var extras = db.RefreshTokens
+                .Where(r => r.UserId == user.Id && r.RevokedAt == null && r.ExpiresAt > now)
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip(MaxActiveRefreshTokens);
+
+            await extras.ExecuteUpdateAsync(setters => setters.SetProperty(r => r.RevokedAt, now));
+
+            // Issue tokens
+            var access = jwtHelper.GenerateAccessToken(user);
+
+            var (rt, expiresUtc, hashHex) = JwtHelper.GenerateRefreshToken(config);
+            db.RefreshTokens.Add(new RefreshToken
             {
-                AccessToken = jwtHelper.GenerateAccessToken(user),
-                RefreshToken = await jwtHelper.GenerateRefreshToken(user)
-            };
+                UserId = user.Id,
+                TokenHash = hashHex,
+                ExpiresAt = expiresUtc,
+                CreatedAt = now
+            });
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return new AuthPayload { AccessToken = access, RefreshToken = rt };
         }
+
 
         // REGISTER
         public async Task<User> RegisterUser(string username, string email, string password, [Service] ThoughtGardenDbContext db)
@@ -107,32 +134,45 @@ namespace ThoughtGarden.Api.GraphQL.Mutations
             return user;
         }
 
-        [Authorize]
-        public async Task<AuthPayload> RefreshToken(string refreshToken, [Service] ThoughtGardenDbContext db, [Service] JwtHelper jwtHelper)
+        public async Task<AuthPayload> RefreshToken(string refreshToken, [Service] ThoughtGardenDbContext db, [Service] IConfiguration config, [Service] JwtHelper jwtHelper)
         {
-            var stored = await db.RefreshTokens.Include(r => r.User).FirstOrDefaultAsync(r => r.Token == refreshToken);
+            var incomingHash = JwtHelper.Sha256Hex(refreshToken);
+            var stored = await db.RefreshTokens
+                .Include(r => r.User)
+                .Where(r => r.ExpiresAt > DateTime.UtcNow && r.RevokedAt == null)
+                .FirstOrDefaultAsync(r => r.TokenHash == incomingHash);
             if (stored == null || !stored.IsActive) throw new GraphQLException("Invalid or expired refresh token");
 
             stored.RevokedAt = DateTime.UtcNow;
+            var (newRt, newExpiresUtc, newHashHex) = JwtHelper.GenerateRefreshToken(config);
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = stored.UserId,
+                TokenHash = newHashHex,
+                ExpiresAt = newExpiresUtc,
+                CreatedAt = DateTime.UtcNow
+            });
+
             await db.SaveChangesAsync();
 
             var access = jwtHelper.GenerateAccessToken(stored.User);
-            var refresh = await jwtHelper.GenerateRefreshToken(stored.User);
-
-            return new AuthPayload { AccessToken = access, RefreshToken = refresh };
+            return new AuthPayload { AccessToken = access, RefreshToken = newRt };
         }
 
 
         // Logout
-        public async Task<bool> LogoutUser(string refreshToken,[Service] ThoughtGardenDbContext db)
+        public async Task<bool> LogoutUser(string refreshToken, [Service] ThoughtGardenDbContext db)
         {
-            var stored = await db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken);
-            if (stored != null && stored.IsActive)
+            var incomingHash = JwtHelper.Sha256Hex(refreshToken);
+            var stored = await db.RefreshTokens
+                .Where(r => r.RevokedAt == null && r.ExpiresAt > DateTime.UtcNow)
+                .FirstOrDefaultAsync(r => r.TokenHash == incomingHash);
+
+            if (stored != null)
             {
                 stored.RevokedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
-
             return true;
         }
     }

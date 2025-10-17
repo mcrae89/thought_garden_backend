@@ -1,11 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using ThoughtGarden.Api.Data;
 using ThoughtGarden.Api.Tests.Factories;
-using ThoughtGarden.Api.Tests.Utils;
 using ThoughtGarden.Models;
-using Xunit;
+
+using static ThoughtGarden.Api.Tests.Utils.GraphQLTestClient;
 
 namespace ThoughtGarden.Api.Tests.GraphQL
 {
@@ -41,14 +39,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 db.SaveChanges();
             }
             return (u.Id, u.UserName, u.Email);
-        }
-
-        private void Authenticate((int Id, string UserName, string Email) user, string role)
-        {
-            var token = JwtTokenGenerator.GenerateToken(
-                _factory.JwtKey, "TestIssuer", "TestAudience",
-                user.Id, user.UserName, user.Email, role);
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         private int CreateEmotionTag(string name = "Happy", string color = "#00FF00")
@@ -109,11 +99,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetStoredPlants_Allows_Self()
         {
             var user = EnsureUser("gp_self", "gp_self@test.com");
-            Authenticate(user, "User");
             CreateGardenPlant(user.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{user.Id}) {{ id gardenStateId plantTypeId isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -125,11 +114,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_admin", "gp_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_user", "gp_user@test.com");
-            Authenticate(admin, "Admin");
             var plant = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{user.Id}) {{ id gardenStateId plantTypeId isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -142,11 +130,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_u1", "gp_u1@test.com");
             var u2 = EnsureUser("gp_u2", "gp_u2@test.com");
-            Authenticate(u1, "User");
             CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"{{ storedPlants(userId:{u2.Id}) {{ id }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -156,7 +143,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetActivePlants_Allows_Self()
         {
             var user = EnsureUser("gp_active_self", "gp_active_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             using (var scope = _factory.Services.CreateScope())
@@ -169,7 +155,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var payload = new { query = $"{{ activePlants(gardenStateId:{gp.GardenStateId}) {{ id order isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -181,11 +167,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_act_u1", "gp_act_u1@test.com");
             var u2 = EnsureUser("gp_act_u2", "gp_act_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"{{ activePlants(gardenStateId:{gp.GardenStateId}) {{ id order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json);
@@ -195,11 +180,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GetActivePlants_Returns_Empty_When_None()
         {
             var user = EnsureUser("gp_empty", "gp_empty@test.com");
-            Authenticate(user, "User");
             var gs = CreateGardenState(user.Id);
 
             var payload = new { query = $"{{ activePlants(gardenStateId:{gs.Id}) {{ id order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -216,12 +200,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task AddGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_add_self", "gp_add_self@test.com");
-            Authenticate(user, "User");
             var gs = CreateGardenState(user.Id);
             var pt = CreatePlantType("Lily");
 
             var payload = new { query = $"mutation {{ addGardenPlant(gardenStateId:{gs.Id}, plantTypeId:{pt.Id}) {{ id gardenStateId plantTypeId }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -233,12 +216,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_add_admin", "gp_add_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_add_target", "gp_add_target@test.com");
-            Authenticate(admin, "Admin");
             var gs = CreateGardenState(user.Id);
             var pt = CreatePlantType("AdminPlant");
 
             var payload = new { query = $"mutation {{ addGardenPlant(gardenStateId:{gs.Id}, plantTypeId:{pt.Id}) {{ id gardenStateId plantTypeId }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -251,12 +233,11 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_add_u1", "gp_add_u1@test.com");
             var u2 = EnsureUser("gp_add_u2", "gp_add_u2@test.com");
-            Authenticate(u1, "User");
             var gs = CreateGardenState(u2.Id);
             var pt = CreatePlantType("Blocked");
 
             var payload = new { query = $"mutation {{ addGardenPlant(gardenStateId:{gs.Id}, plantTypeId:{pt.Id}) {{ id }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -269,11 +250,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GrowGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_grow_self", "gp_grow_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -285,11 +265,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_grow_admin", "gp_grow_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_grow_target", "gp_grow_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}, growthMultiplier:2) {{ id growthProgress }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -300,11 +279,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GrowGardenPlant_Returns_Null_When_Not_Found()
         {
             var user = EnsureUser("gp_grow_nf", "gp_grow_nf@test.com");
-            Authenticate(user, "User");
 
             var payload = new { query = "mutation { growGardenPlant(plantId:99999) { id growthProgress } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode();
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
+            resp.EnsureSuccessStatusCode(); // 200 with errors
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
@@ -315,10 +293,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GrowGardenPlant_Resets_And_Advances_Stage_When_Reaching_100()
         {
             var user = EnsureUser("gp_grow_stage", "gp_grow_stage@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
-            // Pre-set growth close to 100
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -329,11 +305,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            // Expect rollover
             Assert.Contains("\"growthProgress\":0", json);
             Assert.Contains("Sprout", json, StringComparison.OrdinalIgnoreCase);
         }
@@ -342,16 +317,14 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task GrowGardenPlant_Applies_GrowthMultiplier()
         {
             var user = EnsureUser("gp_grow_mult", "gp_grow_mult@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}, growthMultiplier:2) {{ id growthProgress }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            // 5% * 2 = 10
-            Assert.Contains("10", json); // JSON serializes doubles as decimals
+            Assert.Contains("10", json); // 5% * 2 = 10
         }
 
         [Fact]
@@ -359,11 +332,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_grow_u1", "gp_grow_u1@test.com");
             var u2 = EnsureUser("gp_grow_u2", "gp_grow_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -375,10 +347,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             var user = EnsureUser("gp_grow_anon", "gp_grow_anon@test.com");
             var gp = CreateGardenPlant(user.Id);
 
-            // Do NOT call Authenticate()
-
             var payload = new { query = $"mutation {{ growGardenPlant(plantId:{gp.Id}) {{ id growthProgress }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostGraphQLAsync(_client, payload);
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -392,10 +362,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task MatureGardenPlant_Allows_Self_When_Blooming()
         {
             var user = EnsureUser("gp_mature_self", "gp_mature_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
-            // Pre-set to Bloom
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ThoughtGardenDbContext>();
@@ -405,7 +373,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -416,11 +384,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task MatureGardenPlant_Fails_When_Not_Bloom()
         {
             var user = EnsureUser("gp_mature_fail", "gp_mature_fail@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id); // Starts at Seed
 
             var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Only blooming plants can mature", json);
@@ -431,7 +398,6 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_mature_admin", "gp_mature_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_mature_target", "gp_mature_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             using (var scope = _factory.Services.CreateScope())
@@ -443,7 +409,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -454,28 +420,21 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task MatureGardenPlant_Returns_Error_When_Not_Found()
         {
             var user = EnsureUser("gp_mature_nf", "gp_mature_nf@test.com");
-            Authenticate(user, "User");
 
-            var payload = new
-            {
-                query = "mutation { matureGardenPlant(plantId:99999) { id stage } }"
-            };
-
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
-            resp.EnsureSuccessStatusCode(); // now returns 200 with top-level errors
+            var payload = new { query = "mutation { matureGardenPlant(plantId:99999) { id stage } }" };
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
+            resp.EnsureSuccessStatusCode(); // 200 with top-level errors
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("\"errors\"", json, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("not found", json, StringComparison.OrdinalIgnoreCase);
         }
 
-
         [Fact]
         public async Task MatureGardenPlant_Denies_Other_User()
         {
             var u1 = EnsureUser("gp_mature_u1", "gp_mature_u1@test.com");
             var u2 = EnsureUser("gp_mature_u2", "gp_mature_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             using (var scope = _factory.Services.CreateScope())
@@ -487,7 +446,7 @@ namespace ThoughtGarden.Api.Tests.GraphQL
             }
 
             var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -507,10 +466,8 @@ namespace ThoughtGarden.Api.Tests.GraphQL
                 db.SaveChanges();
             }
 
-            // Do NOT call Authenticate()
-
             var payload = new { query = $"mutation {{ matureGardenPlant(plantId:{gp.Id}) {{ id stage }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostGraphQLAsync(_client, payload);
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -524,11 +481,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task MoveGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_move_self", "gp_move_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:5) {{ id order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -540,11 +496,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_move_admin", "gp_move_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_move_target", "gp_move_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:3) {{ id order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -555,10 +510,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task MoveGardenPlant_Returns_Null_When_Not_Found()
         {
             var user = EnsureUser("gp_move_nf", "gp_move_nf@test.com");
-            Authenticate(user, "User");
 
             var payload = new { query = "mutation { moveGardenPlant(plantId:99999, newOrder:1) { id order } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -571,11 +525,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_move_u1", "gp_move_u1@test.com");
             var u2 = EnsureUser("gp_move_u2", "gp_move_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ moveGardenPlant(plantId:{gp.Id}, newOrder:5) {{ id order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -589,11 +542,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task StoreGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_store_self", "gp_store_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -605,11 +557,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_store_admin", "gp_store_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_store_target", "gp_store_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -620,10 +571,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task StoreGardenPlant_Returns_Null_When_Not_Found()
         {
             var user = EnsureUser("gp_store_nf", "gp_store_nf@test.com");
-            Authenticate(user, "User");
 
             var payload = new { query = "mutation { storeGardenPlant(plantId:99999) { id isStored } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -636,11 +586,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_store_u1", "gp_store_u1@test.com");
             var u2 = EnsureUser("gp_store_u2", "gp_store_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ storeGardenPlant(plantId:{gp.Id}) {{ id isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -650,16 +599,15 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task RestoreGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_restore_self", "gp_restore_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:2) {{ id isStored order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
-            Assert.Contains("false", json); // not stored anymore
-            Assert.Contains("2", json);     // moved to order 2
+            Assert.Contains("false", json);
+            Assert.Contains("2", json);
         }
 
         [Fact]
@@ -667,11 +615,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_restore_admin", "gp_restore_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_restore_target", "gp_restore_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:4) {{ id isStored order }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -683,10 +630,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task RestoreGardenPlant_Returns_Null_When_Not_Found()
         {
             var user = EnsureUser("gp_restore_nf", "gp_restore_nf@test.com");
-            Authenticate(user, "User");
 
             var payload = new { query = "mutation { restoreGardenPlant(plantId:99999, newOrder:1) { id isStored } }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -699,11 +645,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_restore_u1", "gp_restore_u1@test.com");
             var u2 = EnsureUser("gp_restore_u2", "gp_restore_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ restoreGardenPlant(plantId:{gp.Id}, newOrder:2) {{ id isStored }} }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);
@@ -712,16 +657,15 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         #endregion
 
         #region Delete
-        
+
         [Fact]
         public async Task DeleteGardenPlant_Allows_Self()
         {
             var user = EnsureUser("gp_delete_self", "gp_delete_self@test.com");
-            Authenticate(user, "User");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -733,11 +677,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var admin = EnsureUser("gp_delete_admin", "gp_delete_admin@test.com", UserRole.Admin);
             var user = EnsureUser("gp_delete_target", "gp_delete_target@test.com");
-            Authenticate(admin, "Admin");
             var gp = CreateGardenPlant(user.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, admin, "Admin");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -748,10 +691,9 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         public async Task DeleteGardenPlant_Returns_False_When_Not_Found()
         {
             var user = EnsureUser("gp_delete_nf", "gp_delete_nf@test.com");
-            Authenticate(user, "User");
 
             var payload = new { query = "mutation { deleteGardenPlant(id:99999) }" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, user, "User");
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync();
 
@@ -764,11 +706,10 @@ namespace ThoughtGarden.Api.Tests.GraphQL
         {
             var u1 = EnsureUser("gp_delete_u1", "gp_delete_u1@test.com");
             var u2 = EnsureUser("gp_delete_u2", "gp_delete_u2@test.com");
-            Authenticate(u1, "User");
             var gp = CreateGardenPlant(u2.Id);
 
             var payload = new { query = $"mutation {{ deleteGardenPlant(id:{gp.Id}) }}" };
-            var resp = await _client.PostAsJsonAsync("/graphql", payload);
+            var resp = await PostAsUserAsync(_client, _factory, payload, u1, "User");
             var json = await resp.Content.ReadAsStringAsync();
 
             Assert.Contains("Not authorized", json, StringComparison.OrdinalIgnoreCase);

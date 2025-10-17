@@ -151,7 +151,7 @@ namespace ThoughtGarden.Api.Migrations
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     user_id = table.Column<int>(type: "integer", nullable: false),
-                    token = table.Column<string>(type: "text", nullable: false),
+                    token_hash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     revoked_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
@@ -342,9 +342,19 @@ namespace ThoughtGarden.Api.Migrations
                 column: "emotion_tag_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_refresh_tokens_user_id",
+                name: "ix_refresh_tokens_expires_at_revoked_at",
                 table: "refresh_tokens",
-                column: "user_id");
+                columns: new[] { "expires_at", "revoked_at" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_refresh_tokens_token_hash",
+                table: "refresh_tokens",
+                column: "token_hash");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_refresh_tokens_user_id_revoked_at",
+                table: "refresh_tokens",
+                columns: new[] { "user_id", "revoked_at" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_user_settings_user_id",
